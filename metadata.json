@@ -1,0 +1,12 @@
+{
+  "name": "Aether Security",
+  "description": "Plataforma de comunicación cifrada en tiempo real con WebSocket/P2P, notificaciones push, personalización de colores, dashboard de administración con análisis de amenazas IA y control de seguridad por IP.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "notifications"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

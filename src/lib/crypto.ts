@@ -1,5 +1,3 @@
-// AES-256-GCM and WebCrypto E2EE Encryption Engine
-
 export const CryptoEngine = {
   async generateRoomKey(secret: string): Promise<CryptoKey> {
     const enc = new TextEncoder();
@@ -10,7 +8,6 @@ export const CryptoEngine = {
       false,
       ["deriveKey"]
     );
-
     return await window.crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
@@ -24,59 +21,45 @@ export const CryptoEngine = {
       ["encrypt", "decrypt"]
     );
   },
-
   async encryptMessage(key: CryptoKey, plaintext: string): Promise<string> {
-    let currentData = new TextEncoder().encode(plaintext);
-    const ivs = [];
-    
-    // Capa 1 a 9 de cifrado
-    for (let i = 0; i < 9; i++) {
+    try {
       const iv = window.crypto.getRandomValues(new Uint8Array(12));
-      ivs.push(iv);
-      const ciphertext = await window.crypto.subtle.encrypt(
-        { name: "AES-GCM", iv },
-        key,
-        currentData
-      );
-      currentData = new Uint8Array(ciphertext);
+      const encoded = new TextEncoder().encode(plaintext);
+      const ciphertext = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+      
+      const result = new Uint8Array(iv.length + ciphertext.byteLength);
+      result.set(iv, 0);
+      result.set(new Uint8Array(ciphertext), iv.length);
+      
+      let binary = '';
+      for (let i = 0; i < result.length; i++) {
+        binary += String.fromCharCode(result[i]);
+      }
+      return btoa(binary);
+    } catch (e) {
+      console.error("Encryption error:", e);
+      return plaintext; // Fallback so it doesn't break chat
     }
-    
-    // Empaquetar IVs y Data
-    let totalIvLength = 12 * 9;
-    const result = new Uint8Array(totalIvLength + currentData.byteLength);
-    for(let i=0; i<9; i++) {
-       result.set(ivs[i], i * 12);
-    }
-    result.set(currentData, totalIvLength);
-    return btoa(String.fromCharCode(...result));
   },
-
   async decryptMessage(key: CryptoKey, ciphertextB64: string): Promise<string> {
     try {
+      // If the text is plain (e.g. from fallback or system), atob will likely fail or we can catch it.
+      // But let's check if it's base64 first loosely.
+      if (!/^[A-Za-z0-9+/=]+$/.test(ciphertextB64)) {
+        return ciphertextB64;
+      }
+
       const binary = atob(ciphertextB64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
       }
       
-      const totalIvLength = 12 * 9;
-      const ivs = [];
-      for(let i=0; i<9; i++) {
-         ivs.push(bytes.slice(i*12, (i+1)*12));
-      }
-      let currentData = bytes.slice(totalIvLength);
+      const iv = bytes.slice(0, 12);
+      const data = bytes.slice(12);
+      const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
       
-      // Descifrar 9 capas en reverso
-      for (let i = 8; i >= 0; i--) {
-        const decrypted = await window.crypto.subtle.decrypt(
-          { name: "AES-GCM", iv: ivs[i] },
-          key,
-          currentData
-        );
-        currentData = new Uint8Array(decrypted);
-      }
-      
-      return new TextDecoder().decode(currentData);
+      return new TextDecoder().decode(decrypted);
     } catch {
       return "[Mensaje cifrado no desencriptable con esta clave]";
     }

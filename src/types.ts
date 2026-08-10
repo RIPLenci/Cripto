@@ -1,13 +1,27 @@
+export interface InfractionLog {
+  id: string;
+  number: number;
+  timestamp: number;
+  dateFormatted: string;
+  reason: string;
+  evidence: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  roomName?: string;
+  attachmentsInfo?: string;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
   name: string;
   ip: string;
   role: 'user' | 'admin';
-  status: 'Activo' | 'Baneado';
+  status: 'Activo' | 'Baneado' | 'Sancionado';
   isVerified: boolean;
   createdAt: number;
   isBanned?: boolean;
+  violations?: number;
+  infractions?: InfractionLog[];
   banReason?: string;
   banSeverity?: 'low' | 'medium' | 'high' | 'critical';
   banEvidence?: string;
@@ -42,7 +56,7 @@ export interface ChatMessage {
   text?: string;
   attachments?: Array<{ name: string; type: string; data: string; size?: string }>;
   replyTo?: { id: string; senderName: string; text: string };
-  reactions?: string[];
+  reactions?: Array<{emoji: string, senderName: string}> | any[];
   selfDestruct?: number;
   time: string;
   timestamp: number;

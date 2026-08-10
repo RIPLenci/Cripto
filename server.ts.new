@@ -4,24 +4,21 @@ import http from "http";
 import path from "path";
 import crypto from "crypto";
 import fs from "fs";
-import mongoose from "mongoose";
+import { MongoClient, Db } from "mongodb";
 
-
+let mongoClient: MongoClient | null = null;
+let mongoDb: Db | null = null;
 
 async function connectMongo() {
+  if (mongoDb) return mongoDb;
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     throw new Error("La variable de entorno MONGODB_URI no está definida. Por favor, configúrala en la pestaña de Secrets o en el archivo .env.");
   }
-  if (mongoose.connection.readyState === 0) {
-    try {
-      console.log("Conectando a MongoDB...");
-      await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
-      console.log("Conexión a MongoDB establecida.");
-    } catch (err) {
-      console.error("Error crítico conectando a MongoDB. Verifica que la IP esté en la lista blanca de Atlas:", err.message);
-    }
-  }
+  mongoClient = new MongoClient(uri);
+  await mongoClient.connect();
+  mongoDb = mongoClient.db();
+  return mongoDb;
 }
 import "fake-indexeddb/auto";
 Object.defineProperty(global, 'window', {
@@ -43,12 +40,10 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import nodemailer from "nodemailer";
-import compression from "compression";
 
 const INSTANTDB_APP_ID = "222816e6-294f-4d87-ab1e-6e94aa4e6c74";
 const PORT = 3000;
 const app = express();
-app.use(compression());
 app.use(express.json({ limit: "25mb" }));
 
 // Server-side Gmail SMTP Transporter & Mail Sender
@@ -69,11 +64,10 @@ const DB_FILE = path.join(process.cwd(), "database.enc");
 
 const DB_SECRET = process.env.DB_SECRET || "AETHER_SUPER_SECRET_KEY_2026_12345";
 const algorithm = 'aes-256-cbc';
-const DERIVED_DB_KEY = crypto.scryptSync(DB_SECRET, 'salt', 32);
 
 function encryptDB(text: string) {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(algorithm, DERIVED_DB_KEY, iv);
+  const cipher = crypto.createCipheriv(algorithm, crypto.scryptSync(DB_SECRET, 'salt', 32), iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   return iv.toString('hex') + ':' + encrypted;
@@ -83,7 +77,7 @@ function decryptDB(text: string) {
   const textParts = text.split(':');
   const iv = Buffer.from(textParts.shift()!, 'hex');
   const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-  const decipher = crypto.createDecipheriv(algorithm, DERIVED_DB_KEY, iv);
+  const decipher = crypto.createDecipheriv(algorithm, crypto.scryptSync(DB_SECRET, 'salt', 32), iv);
   let decrypted = decipher.update(encryptedText);
   decrypted = Buffer.concat([decrypted, decipher.final()]);
   return decrypted.toString('utf8');
@@ -188,230 +182,6 @@ const ai = new GoogleGenAI({
     },
   },
 });
-
-// ==========================================
-// MULTI-MODEL AI ENGINE (NVIDIA NIM + GEMINI)
-// ==========================================
-// ==========================================
-// MULTI-MODEL AI ENGINE (NVIDIA NIM + GEMINI MULTIMODAL)
-// ==========================================
-async function queryNvidiaAI(prompt: string, model: string = "meta/llama-3.1-70b-instruct", systemPrompt?: string): Promise<string | null> {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt || "Eres AETHER MULTI-MODEL AI MASTER (NVIDIA NIM), analista de ciberseguridad, moderación y procesamiento multimodal." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.2,
-        max_tokens: 1024
-      })
-    });
-
-    if (!response.ok) {
-      console.warn(`[NVIDIA AI] Modelo ${model} devolvió status HTTP ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (err: any) {
-    console.warn(`[NVIDIA AI Error] Modelo ${model}:`, err.message);
-    return null;
-  }
-}
-
-async function queryNvidiaMultimodal(
-  prompt: string,
-  mediaItems: Array<{ data: string; mimeType: string }> = [],
-  model: string = "meta/llama-3.2-11b-vision-instruct",
-  systemPrompt?: string
-): Promise<string | null> {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const userContent: any[] = [{ type: "text", text: prompt }];
-
-    for (const item of mediaItems) {
-      if (item.mimeType && item.mimeType.startsWith("image/")) {
-        let b64 = item.data;
-        if (b64.includes(";base64,")) b64 = b64.split(";base64,")[1];
-        userContent.push({
-          type: "image_url",
-          image_url: { url: `data:${item.mimeType};base64,${b64}` }
-        });
-      }
-    }
-
-    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt || "Eres AETHER MULTIMODAL VISION MASTER (NVIDIA NIM), especializado en análisis de imágenes, video, audio y texto." },
-          { role: "user", content: mediaItems.some(m => m.mimeType?.startsWith("image/")) ? userContent : prompt }
-        ],
-        temperature: 0.2,
-        max_tokens: 1200
-      })
-    });
-
-    if (!response.ok) {
-      console.warn(`[NVIDIA Multimodal] Modelo ${model} HTTP ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (err: any) {
-    console.warn(`[NVIDIA Multimodal Error] Modelo ${model}:`, err.message);
-    return null;
-  }
-}
-
-let geminiRateLimitedUntil = 0;
-
-async function queryMultiModelText(prompt: string, systemPrompt?: string, jsonMode: boolean = false) {
-  // 1. First try NVIDIA AI models if NVIDIA_API_KEY is configured
-  if (process.env.NVIDIA_API_KEY) {
-    const nvidiaModels = [
-      "meta/llama-3.1-70b-instruct",
-      "nvidia/llama-3.1-nemotron-70b-instruct",
-      "mistralai/mixtral-8x22b-instruct",
-      "mistralai/mistral-large-2-instruct"
-    ];
-
-    for (const nvModel of nvidiaModels) {
-      const res = await queryNvidiaAI(prompt, nvModel, systemPrompt);
-      if (res) {
-        return { text: res, provider: `NVIDIA NIM (${nvModel})` };
-      }
-    }
-  }
-
-  // 2. Fallback to Gemini models (if not temporarily paused due to quota limit)
-  if (Date.now() > geminiRateLimitedUntil) {
-    const geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash"];
-    for (const gModel of geminiModels) {
-      try {
-        const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-        const res = await ai.models.generateContent({
-          model: gModel,
-          contents: fullPrompt,
-          ...(jsonMode ? { config: { responseMimeType: "application/json" } } : {})
-        });
-        if (res?.text) {
-          return { text: res.text, provider: `Google Gemini (${gModel})` };
-        }
-      } catch (err: any) {
-        const errStr = String(err?.message || err || "");
-        if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
-          geminiRateLimitedUntil = Date.now() + 60000;
-          break;
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-async function queryMultiModelMultimodal(
-  prompt: string,
-  mediaItems: Array<{ data: string; mimeType: string }> = [],
-  systemPrompt?: string
-) {
-  const results: Array<{ provider: string; text: string }> = [];
-
-  // Run NVIDIA NIM Vision / LLM and Gemini Multimodal concurrently
-  const tasks: Promise<void>[] = [];
-
-  // Task 1: NVIDIA NIM
-  if (process.env.NVIDIA_API_KEY) {
-    tasks.push((async () => {
-      const nvVisionModels = ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.1-70b-instruct"];
-      for (const model of nvVisionModels) {
-        const res = await queryNvidiaMultimodal(prompt, mediaItems, model, systemPrompt);
-        if (res) {
-          results.push({ provider: `NVIDIA NIM (${model})`, text: res });
-          break;
-        }
-      }
-    })());
-  }
-
-  // Task 2: Gemini Multimodal (if not temporarily paused due to quota limit)
-  tasks.push((async () => {
-    if (Date.now() <= geminiRateLimitedUntil) return;
-    const geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash"];
-    for (const gModel of geminiModels) {
-      try {
-        const parts: any[] = [];
-        for (const item of mediaItems) {
-          let b64 = item.data;
-          if (b64.includes(";base64,")) b64 = b64.split(";base64,")[1];
-          parts.push({
-            inlineData: {
-              mimeType: item.mimeType || "image/jpeg",
-              data: b64
-            }
-          });
-        }
-        parts.push(systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt);
-
-        const aiRes = await ai.models.generateContent({
-          model: gModel,
-          contents: parts
-        });
-
-        if (aiRes && aiRes.text) {
-          results.push({ provider: `Google Gemini (${gModel})`, text: aiRes.text });
-          break;
-        }
-      } catch (err: any) {
-        const errStr = String(err?.message || err || "");
-        if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
-          geminiRateLimitedUntil = Date.now() + 60000;
-          break;
-        }
-      }
-    }
-  })());
-
-  await Promise.allSettled(tasks);
-
-  if (results.length === 0) return null;
-
-  if (results.length === 1) {
-    return {
-      text: results[0].text,
-      provider: results[0].provider,
-      combined: false
-    };
-  }
-
-  // If both NVIDIA and Gemini returned analysis, combine for dual-validation!
-  const combinedText = `--- ⚡ Análisis Principal (${results[0].provider}) ---\n${results[0].text}\n\n--- 🛡️ Validación Cruzada (${results[1].provider}) ---\n${results[1].text}`;
-  return {
-    text: combinedText,
-    provider: `${results[0].provider} + ${results[1].provider}`,
-    combined: true
-  };
-}
 
 // Verification codes stores (Email -> { code, expiresAt })
 const emailVerificationCodes = new Map<string, { codeHash: string; expiresAt: number }>();
@@ -548,231 +318,96 @@ interface SecurityLogRecord {
 
 import { UserModel, RoomModel, MessageModel, ThreatModel, SecurityLogModel, BannedIPModel } from './src/db/models.js';
 
-const LAYER_KEYS: Buffer[] = Array.from({ length: 10 }, (_, i) => 
-  i >= 1 ? crypto.scryptSync(`AETHER_SECRET_KEY_LAYER_${i}_2026`, "salt" + i, 32) : Buffer.alloc(0)
-);
-
 class DatabaseStore {
-  public decryptStringIfNeeded(val: any): string {
-    if (!val || typeof val !== 'string') return val || '';
-    let cleaned = val.trim();
-    if (cleaned.startsWith('__enc_')) {
-      cleaned = cleaned.replace(/^__enc_[a-zA-Z0-9_]+:/, '');
-    }
-    if (cleaned.includes(':') && cleaned.split(':').length === 2 && cleaned.split(':')[0].length === 32) {
-      const dec = this.decryptMetadata(cleaned);
-      if (dec) cleaned = dec;
-    }
-    return cleaned;
-  }
-
-  async getUser(id: string) {
-    const doc = await (UserModel as any).findOne({ id: id } as any);
-    if (!doc) return null;
-    const obj = doc.toObject ? doc.toObject() : doc;
-    return {
-      ...obj,
-      name: this.decryptStringIfNeeded(obj.name),
-      ip: this.decryptStringIfNeeded(obj.ip),
-      banReason: this.decryptStringIfNeeded(obj.banReason),
-      banEvidence: this.decryptStringIfNeeded(obj.banEvidence)
-    };
-  }
-
-  async getUserByEmail(email: string) {
-    const clean = String(email || '').trim().toLowerCase();
-    const doc = await (UserModel as any).findOne({ email: clean } as any);
-    if (!doc) return null;
-    const obj = doc.toObject ? doc.toObject() : doc;
-    return {
-      ...obj,
-      name: this.decryptStringIfNeeded(obj.name),
-      ip: this.decryptStringIfNeeded(obj.ip),
-      banReason: this.decryptStringIfNeeded(obj.banReason),
-      banEvidence: this.decryptStringIfNeeded(obj.banEvidence)
-    };
-  }
-
-  async saveUser(user: any) {
-    await (UserModel as any).findOneAndUpdate({ id: user.id } as any, user, { upsert: true });
-  }
-
-  async getRoom(id: string) {
-    const doc = await (RoomModel as any).findOne({ id: id } as any);
-    if (!doc) return null;
-    const obj = doc.toObject ? doc.toObject() : doc;
-    return {
-      ...obj,
-      name: this.decryptStringIfNeeded(obj.name)
-    };
-  }
-
-  async getRoomByCode(code: string) {
-    if (!code) return null;
-    const cleanCode = String(code).trim();
-    
-    // 1. Exact match
-    let doc = await (RoomModel as any).findOne({ code: cleanCode } as any);
-    if (doc) {
-      const obj = doc.toObject ? doc.toObject() : doc;
-      return { ...obj, name: this.decryptStringIfNeeded(obj.name) };
-    }
-
-    // 2. Case-insensitive regex match
-    try {
-      doc = await (RoomModel as any).findOne({ code: { $regex: new RegExp('^' + cleanCode + '$', 'i') } } as any);
-      if (doc) {
-        const obj = doc.toObject ? doc.toObject() : doc;
-        return { ...obj, name: this.decryptStringIfNeeded(obj.name) };
-      }
-    } catch (e) {
-      // Regex fallback
-    }
-
-    // 3. Scan all rooms fallback
-    const all = await (RoomModel as any).find();
-    const found = all.find((r: any) => r.code && String(r.code).trim().toLowerCase() === cleanCode.toLowerCase());
-    if (found) {
-      const obj = found.toObject ? found.toObject() : found;
-      return { ...obj, name: this.decryptStringIfNeeded(obj.name) };
-    }
-
-    return null;
-  }
-
-  async saveRoom(room: any) {
-    await (RoomModel as any).findOneAndUpdate({ id: room.id } as any, room, { upsert: true });
-  }
-
-  async getMessages(roomId: string) {
-    const docs = await (MessageModel as any).find({ roomId: roomId } as any).sort({ timestamp: 1 });
-    return docs.map((d: any) => {
-      const obj = d.toObject ? d.toObject() : d;
-      return {
-        ...obj,
-        senderName: this.decryptStringIfNeeded(obj.senderName),
-        senderEmail: this.decryptStringIfNeeded(obj.senderEmail),
-        encryptedText: this.decryptStringIfNeeded(obj.encryptedText)
-      };
-    });
-  }
-
-  async saveMessage(msg: any) {
-    await (MessageModel as any).create(msg);
-  }
-
-  async addBannedIP(ip: string) {
-    await (BannedIPModel as any).findOneAndUpdate({ ip: ip } as any, { ip, timestamp: Date.now() }, { upsert: true });
-  }
-
-  async removeBannedIP(ip: string) {
-    await (BannedIPModel as any).deleteOne({ ip: ip } as any);
-  }
-
-  async isIpBanned(ip: string) {
-    return (await (BannedIPModel as any).findOne({ ip: ip } as any)) !== null;
-  }
-
-  async addThreat(threat: any) {
-    await (ThreatModel as any).create(threat);
-  }
-
-  async addSecurityLog(log: any) {
-    await (SecurityLogModel as any).create(log);
-  }
-
-  async getAllUsers() {
-    const docs = await (UserModel as any).find();
-    return docs.map((d: any) => {
-      const obj = d.toObject ? d.toObject() : d;
-      return {
-        ...obj,
-        id: obj.id || (obj._id ? obj._id.toString() : ''),
-        name: this.decryptStringIfNeeded(obj.name),
-        ip: this.decryptStringIfNeeded(obj.ip),
-        banReason: this.decryptStringIfNeeded(obj.banReason),
-        banEvidence: this.decryptStringIfNeeded(obj.banEvidence)
-      };
-    });
-  }
-
-  async getAllRooms() {
-    const docs = await (RoomModel as any).find();
-    return docs.map((d: any) => {
-      const obj = d.toObject ? d.toObject() : d;
-      return {
-        ...obj,
-        name: this.decryptStringIfNeeded(obj.name)
-      };
-    });
-  }
-
-  async getAllBannedIPs() {
-    const ips = await (BannedIPModel as any).find();
-    return ips.map((i: any) => this.decryptStringIfNeeded(i.ip));
-  }
-
-  async getAllThreats() {
-    const docs = await (ThreatModel as any).find();
-    return docs.map((d: any) => {
-      const obj = d.toObject ? d.toObject() : d;
-      return {
-        id: obj.id || (obj._id ? obj._id.toString() : 'threat-' + Math.random()),
-        ip: this.decryptStringIfNeeded(obj.ip),
-        userId: obj.userId,
-        userEmail: this.decryptStringIfNeeded(obj.userEmail),
-        reason: this.decryptStringIfNeeded(obj.reason),
-        severity: obj.severity || 'high',
-        evidence: this.decryptStringIfNeeded(obj.evidence),
-        timestamp: obj.timestamp || Date.now(),
-        blocked: true,
-        webhookNotified: false
-      };
-    });
-  }
-
-  async getAllSecurityLogs() {
-    const docs = await (SecurityLogModel as any).find().sort({ timestamp: -1 });
-    return docs.map((d: any) => {
-      const obj = d.toObject ? d.toObject() : d;
-      return {
-        id: obj.id || (obj._id ? obj._id.toString() : 'log-' + Math.random()),
-        ip: this.decryptStringIfNeeded(obj.ip),
-        action: obj.event || obj.action || 'ACCESS',
-        event: obj.event || obj.action || 'ACCESS',
-        target: this.decryptStringIfNeeded(obj.target),
-        userEmail: this.decryptStringIfNeeded(obj.userEmail),
-        details: this.decryptStringIfNeeded(obj.details),
-        timestamp: obj.timestamp || Date.now(),
-        suspicious: !!obj.suspicious
-      };
-    });
-  }
-
-  async getUsersCount() { return await (UserModel as any).countDocuments(); }
-  async getRoomsCount() { return await (RoomModel as any).countDocuments(); }
-  async getBannedIPsCount() { return await (BannedIPModel as any).countDocuments(); }
-  async getThreatsCount() { return await (ThreatModel as any).countDocuments(); }
-  async getSecurityLogsCount() { return await (SecurityLogModel as any).countDocuments(); }
-  
+  async getUser(id) { return await UserModel.findOne({ id }).lean(); }
+  async getUserByEmail(email) { return await UserModel.findOne({ email }).lean(); }
+  async saveUser(user) { await UserModel.findOneAndUpdate({ id: user.id }, user, { upsert: true }); }
+  async deleteUser(id) { await UserModel.deleteOne({ id }); }
+  async getRoom(id) { return await RoomModel.findOne({ id }).lean(); }
+  async getRoomByCode(code) { return await RoomModel.findOne({ code }).lean(); }
+  async saveRoom(room) { await RoomModel.findOneAndUpdate({ id: room.id }, room, { upsert: true }); }
+  async getMessages(roomId) { return await MessageModel.find({ roomId }).sort({ timestamp: 1 }).lean(); }
+  async saveMessage(msg) { await MessageModel.create(msg); }
+  async addBannedIP(ip) { await BannedIPModel.findOneAndUpdate({ ip }, { ip, timestamp: Date.now() }, { upsert: true }); }
+  async removeBannedIP(ip) { await BannedIPModel.deleteOne({ ip }); }
+  async isIpBanned(ip) { return (await BannedIPModel.findOne({ ip })) !== null; }
+  async addThreat(threat) { await ThreatModel.create(threat); }
+  async addSecurityLog(log) { await SecurityLogModel.create(log); }
+  async getAllUsers() { return await UserModel.find().lean(); }
+  async getAllRooms() { return await RoomModel.find().lean(); }
+  async getAllBannedIPs() { return await BannedIPModel.find().lean(); }
+  async getAllThreats() { return await ThreatModel.find().lean(); }
+  async getAllSecurityLogs() { return await SecurityLogModel.find().lean(); }
+  async getUsersCount() { return await UserModel.countDocuments(); }
+  async getRoomsCount() { return await RoomModel.countDocuments(); }
+  async getBannedIPsCount() { return await BannedIPModel.countDocuments(); }
+  async getThreatsCount() { return await ThreatModel.countDocuments(); }
+  async getSecurityLogsCount() { return await SecurityLogModel.countDocuments(); }
+  // dummy for compatibility
   isDirty = false;
   saveDatabase() {}
 
+  public isDirty = false;
+  public users = new Map<string, UserRecord>();
+  public userByEmailIndex = new Map<string, string>();
+  public bannedIPs = new Set<string>();
+  
+  public rooms = new Map<string, RoomRecord>();
+  public roomByCodeIndex = new Map<string, string>();
+  
+  public messages = new Map<string, MessageRecord[]>();
+  public threats: ThreatRecord[] = [];
+  public securityLogs: SecurityLogRecord[] = [];
+
+  constructor() {
+    this.loadDatabase();
+    setInterval(() => {
+      if (this.isDirty) {
+        this.saveDatabase();
+        this.isDirty = false;
+      }
+    }, 5000);
+  }
+
   public async loadDatabase() {
     try {
-      await connectMongo();
-      const usersCount = await this.getUsersCount();
-      if (usersCount === 0) {
-        this.seedDefaultAdmin();
+      if (process.env.MONGODB_URI) {
+        const db = await connectMongo();
+        
+        const usersCol = await db.collection('users').find().toArray();
+        if (usersCol.length === 0) {
+          this.seedDefaultAdmin();
+        } else {
+          this.users = new Map(usersCol.map(u => [u.id, u as any]));
+          this.userByEmailIndex = new Map(usersCol.map(u => [u.email, u.id]));
+        }
+
+        const configCol = await db.collection('config').findOne({ _id: 'global' } as any);
+        if (configCol) {
+          this.bannedIPs = new Set(configCol.bannedIPs || []);
+          this.threats = configCol.threats || [];
+          this.securityLogs = configCol.securityLogs || [];
+        }
+
+        const roomsCol = await db.collection('rooms').find().toArray();
+        this.rooms = new Map(roomsCol.map(r => [r.id, r as any]));
+        this.roomByCodeIndex = new Map(roomsCol.map(r => [r.code, r.id]));
+
+        const msgsCol = await db.collection('messages').find().toArray();
+        this.messages = new Map();
+        for (const doc of msgsCol) {
+          this.messages.set(doc.roomId, doc.messages || []);
+        }
       }
     } catch (err) {
       console.error("MongoDB load error:", err);
+      if (this.users.size === 0) this.seedDefaultAdmin();
     }
   }
 
-  public async seedDefaultAdmin() {
+  public seedDefaultAdmin() {
     const adminId = "admin-master-101";
-    await this.saveUser({
+    this.users.set(adminId, {
       id: adminId,
       email: "ydark126@gmail.com",
       passwordHash: this.hashPassword("Admin123"),
@@ -784,9 +419,64 @@ class DatabaseStore {
       createdAt: Date.now(),
       isBanned: false
     });
+    this.userByEmailIndex.set("ydark126@gmail.com", adminId);
+    this.saveDatabase();
+  }
+
+  public async saveDatabase() {
+    if (!process.env.MONGODB_URI) {
+      this.isDirty = false;
+      return;
+    }
+    try {
+      const db = await connectMongo();
+
+      const usersArray = Array.from(this.users.values());
+      if (usersArray.length > 0) {
+        const bulkUsers = db.collection('users').initializeUnorderedBulkOp();
+        for (const u of usersArray) {
+          bulkUsers.find({ id: u.id } as any).upsert().updateOne({ $set: u });
+        }
+        await bulkUsers.execute();
+      }
+
+      await db.collection('config').updateOne(
+        { _id: 'global' } as any,
+        { $set: {
+            bannedIPs: Array.from(this.bannedIPs),
+            threats: this.threats,
+            securityLogs: this.securityLogs
+          }
+        },
+        { upsert: true }
+      );
+
+      const roomsArray = Array.from(this.rooms.values());
+      if (roomsArray.length > 0) {
+        const bulkRooms = db.collection('rooms').initializeUnorderedBulkOp();
+        for (const r of roomsArray) {
+          bulkRooms.find({ id: r.id } as any).upsert().updateOne({ $set: r });
+        }
+        await bulkRooms.execute();
+      }
+
+      const messagesArray = Array.from(this.messages.entries());
+      if (messagesArray.length > 0) {
+        const bulkMsgs = db.collection('messages').initializeUnorderedBulkOp();
+        for (const [roomId, msgs] of messagesArray) {
+          bulkMsgs.find({ roomId: roomId } as any).upsert().updateOne({ $set: { roomId, messages: msgs } });
+        }
+        await bulkMsgs.execute();
+      }
+
+      this.isDirty = false;
+    } catch (err) {
+      console.error("MongoDB save error:", err);
+    }
   }
 
   public hashPassword(plain: string): string {
+    // 9 capas de encriptación (Hashing)
     let hash = plain;
     for (let i = 1; i <= 9; i++) {
       const algo = i % 2 === 0 ? "sha512" : "sha256";
@@ -797,81 +487,113 @@ class DatabaseStore {
 
   public encryptMetadata(data: string): string {
     try {
+      // 9 capas de encriptación (AES)
       let currentData = data;
       let finalIv = "";
       for (let i = 1; i <= 9; i++) {
-        const key = LAYER_KEYS[i];
+        const key = crypto.scryptSync(`AETHER_SECRET_KEY_LAYER_${i}_2026`, "salt" + i, 32);
         const iv = (i === 9) ? crypto.randomBytes(16) : crypto.createHash('md5').update("AETHER_IV_" + i).digest();
         if (i === 9) finalIv = iv.toString("hex");
-        else finalIv = iv.slice(0, 16).toString("hex");
-        const cipher = crypto.createCipheriv("aes-256-cbc", key, i === 9 ? iv : iv.slice(0, 16));
-        let encrypted = cipher.update(currentData, "utf-8", "hex");
+        const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+        let encrypted = cipher.update(currentData, "utf8", "hex");
         encrypted += cipher.final("hex");
         currentData = encrypted;
       }
       return finalIv + ":" + currentData;
-    } catch (e) {
+    } catch {
       return data;
     }
   }
 
-  public decryptMetadata(data: string): string {
+  public decryptMetadata(encryptedData: string): string {
     try {
-      const parts = data.split(":");
-      if (parts.length < 2) return data;
-      const finalIv = parts.shift()!;
-      let currentData = parts.join(":");
+      const [ivHex, encryptedText] = encryptedData.split(":");
+      if (!ivHex || !encryptedText) return encryptedData;
+      let currentData = encryptedText;
+      
       for (let i = 9; i >= 1; i--) {
-        const key = LAYER_KEYS[i];
-        const iv = (i === 9) ? Buffer.from(finalIv, "hex") : crypto.createHash('md5').update("AETHER_IV_" + i).digest().slice(0, 16);
+        const key = crypto.scryptSync(`AETHER_SECRET_KEY_LAYER_${i}_2026`, "salt" + i, 32);
+        const iv = (i === 9) ? Buffer.from(ivHex, "hex") : crypto.createHash('md5').update("AETHER_IV_" + i).digest();
         const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
-        let decrypted = decipher.update(currentData, "hex", "utf-8");
-        decrypted += decipher.final("utf-8");
+        let decrypted = decipher.update(currentData, "hex", "utf8");
+        decrypted += decipher.final("utf8");
         currentData = decrypted;
       }
       return currentData;
-    } catch (e) {
-      return data;
+    } catch {
+      return encryptedData;
     }
   }
 
-  public async logSecurityEvent(ip: string, event: string, target?: string, details?: string, suspicious = false) {
-    await this.addSecurityLog({
+  public logSecurityEvent(
+    ip: string,
+    action: SecurityLogRecord['action'],
+    userEmail?: string,
+    details?: string,
+    suspicious: boolean = false
+  ) {
+    const log: SecurityLogRecord = {
+      id: "log-" + crypto.randomUUID(),
       ip,
-      event,
-      target,
-      details,
+      action,
+      userEmail,
+      details: this.encryptMetadata(details || ""),
       timestamp: Date.now(),
       suspicious
-    });
+    };
+    this.securityLogs.unshift(log);
+    this.isDirty = true;
+    if (this.securityLogs.length > 500) this.securityLogs.pop();
+    redis.del("admin_logs");
   }
 
-  public async banUserAndIP(ip: string, reason: string, severity: 'low' | 'medium' | 'high' | 'critical', evidence?: string, userId?: string) {
-    await this.addBannedIP(ip);
-    
-    if (userId) {
-      const user = await this.getUser(userId);
-      if (user) {
-        user.isBanned = true;
-        user.status = "Baneado";
-        user.banReason = reason;
-        user.banSeverity = severity;
-        user.banEvidence = evidence;
-        await this.saveUser(user);
+  public banUserAndIP(
+    ip: string,
+    reason: string,
+    severity: 'low' | 'medium' | 'high' | 'critical',
+    evidence: string,
+    userId?: string
+  ) {
+    this.bannedIPs.add(ip);
+    this.isDirty = true;
+
+    if (userId && this.users.has(userId)) {
+      const u = this.users.get(userId)!;
+      u.isBanned = true;
+      u.status = 'Sancionado';
+      u.banReason = reason;
+      u.banSeverity = severity;
+      u.banEvidence = evidence;
+      u.bannedAt = Date.now();
+    } else {
+      for (const u of this.users.values()) {
+        if (u.ip === ip) {
+          u.isBanned = true;
+          u.status = 'Sancionado';
+          u.banReason = reason;
+          u.banSeverity = severity;
+          u.banEvidence = evidence;
+          u.bannedAt = Date.now();
+        }
       }
     }
 
-    await this.addThreat({
+    const threat: ThreatRecord = {
+      id: "threat-" + crypto.randomUUID(),
       ip,
       userId,
-      userEmail: userId ? (await this.getUser(userId))?.email : undefined,
-      reason,
+      threatType: "AI_AUTOMATIC_BAN",
       severity,
       evidence,
-      timestamp: Date.now()
-    });
+      reason,
+      timestamp: Date.now(),
+      blocked: true,
+      webhookNotified: true
+    };
+    this.threats.unshift(threat);
 
-    await this.logSecurityEvent(ip, "BANNED", userId || ip, reason, true);
+    this.logSecurityEvent(ip, "IP_BAN_TRIGGERED", undefined, `Razon: ${reason} | Severidad: ${severity}`, true);
+    redis.flush();
   }
 }
 
@@ -887,9 +609,9 @@ function getClientIP(req: express.Request): string {
 }
 
 // IP Ban Enforcement Middleware
-app.use(async (req, res, next) => {
+app.use((req, res, next) => {
   const ip = getClientIP(req);
-  if ((await db.isIpBanned(ip))) {
+  if (db.bannedIPs.has(ip)) {
     db.logSecurityEvent(ip, "ACCESS_DENIED", undefined, "Petición denegada por IP bloqueada", true);
     return res.status(403).json({
       error: "Acceso restringido",
@@ -901,18 +623,18 @@ app.use(async (req, res, next) => {
 });
 
 // Authentication Token Middleware
-async function authenticateToken(req: express.Request, res: express.Response, next: express.NextFunction) {
+function authenticateToken(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: "Sesión no válida" });
 
   const userId = redis.get(`token:${token}`);
-  if (!userId || !((await db.getUser(userId)) !== null)) {
+  if (!userId || !db.users.has(userId)) {
     return res.status(403).json({ error: "Sesión expirable o inválida" });
   }
 
-  const user = await db.getUser(userId);
-  if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(user.ip))) {
+  const user = db.users.get(userId)!;
+  if (user.isBanned || user.status === 'Sancionado' || db.bannedIPs.has(user.ip)) {
     return res.status(403).json({ error: "Aether Security: Cuenta con estado Baneado." });
   }
 
@@ -922,7 +644,7 @@ async function authenticateToken(req: express.Request, res: express.Response, ne
 }
 
 // Admin Role + 2FA Verification Middleware
-async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = (req as any).user as UserRecord;
   const token = (req as any).token as string;
 
@@ -1260,7 +982,7 @@ async function handleUserInfractionAndNotify(
   if (!user.infractions) user.infractions = [];
   user.violations = (user.violations || 0) + 1;
 
-  const room = roomId ? (await db.getRoom(roomId)) : undefined;
+  const room = roomId ? db.rooms.get(roomId) : undefined;
   const roomName = room ? room.name : "Sala General";
   const now = new Date();
   const dateFormatted = now.toLocaleString('es-ES', { timeZone: 'UTC', dateStyle: 'full', timeStyle: 'medium' }) + " UTC";
@@ -1278,7 +1000,7 @@ async function handleUserInfractionAndNotify(
   };
 
   user.infractions.push(infraction);
-  /* isDirty ignored */
+  db.isDirty = true;
   db.saveDatabase();
 
   if (user.violations === 1) {
@@ -1315,22 +1037,7 @@ async function handleUserInfractionAndNotify(
 
 // AI WAF Scan Helper
 async function analyzeTrafficWithAI(ip: string, userEmail: string | undefined, payloadStr: string, contextType: string, autoBan: boolean = true) {
-  if (!payloadStr || payloadStr.trim().length === 0) {
-    return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
-  }
-
-  // Fast-path for common benign greetings, normal chat, audio labels
-  const benignPattern = /^(hola|hola!|buenas|buenos días|buenas noches|qué tal|probando|test|hola bot|@bot|\/bot|\[audio de voz.*\]|\[adjuntos:.*\])$/i;
-  if (benignPattern.test(payloadStr.trim())) {
-    return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
-  }
-
-  // Do not inspect encrypted blobs (iv:...) as SQL injection
-  if (/^[a-f0-9]{32}:[a-f0-9]+$/i.test(payloadStr.trim())) {
-    return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
-  }
-
-  const sqlPattern = /('|--|union\s+select|select\s+.*\s+from|insert\s+into|drop\s+table|alter\s+table|<script>|javascript:|eval\(|exec\()/i;
+  const sqlPattern = /('|--|union|select|insert|delete|drop|alter|<script>|javascript:|eval\(|exec\()/i;
   const ddosPattern = payloadStr.length > 50000;
 
   if (sqlPattern.test(payloadStr) || ddosPattern) {
@@ -1341,42 +1048,46 @@ async function analyzeTrafficWithAI(ip: string, userEmail: string | undefined, p
   }
 
   try {
-    const prompt = `Actúa como "Aether WAF Guard & Moderación IA", responsable de auditoría técnica.
+    const prompt = `Actúa como "Aether WAF Guard & Moderación IA Superior", el sistema de inteligencia artificial experto en seguridad y cumplimiento legal en tiempo real.
 Analiza detenidamente la siguiente actividad o mensaje de usuario:
 - IP: ${ip}
 - Email: ${userEmail || 'Anónimo'}
 - Contexto: ${contextType}
-- Contenido: "${payloadStr.slice(0, 2000)}"
+- Contenido (Texto, Links, Fotos/Adjuntos): "${payloadStr.slice(0, 2000)}"
 
-REGLAS ABSOLUTAS DE PERMISIVIDAD Y NO-SANCIONABILIDAD:
-1. Saludos cotidianos ("Hola", "Buenas", "Qué tal"), mensajes inocentes, chistes, conversaciones informales, notas de voz normales y preguntas NO SON AMENAZAS.
-2. Jamás sancionar o bloquear mensajes comunes o audios como "Hola". 'isThreat' DEBE SER 'false'.
-3. 'isThreat' solo debe ser 'true' en casos extremadamente graves y explícitos de:
-   - Inyección activa de malware, ransomware, exploits SQLi/XSS/DDoS.
-   - Venta explícita de drogas o armas.
-   - Material de abuso infantil (CSAM).
-   - Amenazas directas de muerte o terrorismo.
-4. Si tienes cualquier duda o es una conversación normal, 'isThreat' DEBE SER 'false'.
+REGLAS DE MODERACIÓN Y SEGURIDAD CRÍTICA:
+1. Analiza el texto, los enlaces (URLs sospechosas) y la intención de las fotos o archivos adjuntos.
+2. Detecta exhaustivamente cualquier contenido ilegal o prohibido:
+   - Venta, tráfico o consumo explícito de drogas, estupefacientes o narcóticos.
+   - Tráfico, venta o incitación al uso de armas de fuego, explosivos o violencia extrema.
+   - Material de abuso sexual infantil (CSAM), pedofilia o pornografía no consensuada.
+   - Terrorismo, extorsión, amenazas de muerte, doxxing o incitación al odio grave.
+   - Enlaces maliciosos, exploits, malware, virus, estafas de phishing o ataques cibernéticos (SQLi, XSS, DDoS).
+2. Si el mensaje es una conversación cotidiana inocente, saludo o consulta normal, isThreat DEBE ser FALSE.
+3. Si contiene referencias a drogas, armas, actividades ilegales o malware, isThreat DEBE ser TRUE.
 
 Responde ÚNICAMENTE en un objeto JSON válido sin bloques markdown ni texto adicional:
 {
   "isThreat": boolean,
   "severity": "low" | "medium" | "high" | "critical",
-  "reason": "Motivo conciso en español",
-  "evidence": "Texto o fragmento exacto"
+  "reason": "Motivo conciso en español de por qué es no permitido o peligroso",
+  "evidence": "Texto o fragmento exacto capturado que viola la norma"
 }`;
 
-    const res = await queryMultiModelText(prompt, "Eres AETHER WAF GUARD & Moderación IA Superior.", true);
-    if (res && res.text) {
-      try {
-        const cleanJson = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanJson);
-        if (parsed.isThreat) {
-          if (autoBan) db.banUserAndIP(ip, parsed.reason, parsed.severity || "high", parsed.evidence || "Análisis automatizado (" + res.provider + ")");
-          return { blocked: true, reason: parsed.reason, severity: parsed.severity || "high", evidence: parsed.evidence || payloadStr.slice(0, 100) };
-        }
-      } catch (e) {
-        // Continue
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const resultText = response.text?.trim();
+    if (resultText) {
+      const parsed = JSON.parse(resultText);
+      if (parsed.isThreat) {
+        if (autoBan) db.banUserAndIP(ip, parsed.reason, parsed.severity || "high", parsed.evidence || "Análisis automatizado");
+        return { blocked: true, reason: parsed.reason, severity: parsed.severity || "high", evidence: parsed.evidence || payloadStr.slice(0, 100) };
       }
     }
   } catch (err) {
@@ -1384,109 +1095,6 @@ Responde ÚNICAMENTE en un objeto JSON válido sin bloques markdown ni texto adi
   }
 
   return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
-}
-
-// ==========================================
-// ASYNCHRONOUS MODERATION QUEUE WORKER
-// ==========================================
-interface ModerationJob {
-  msgId: string;
-  roomId: string;
-  senderIp: string;
-  senderEmail: string;
-  senderUserId: string;
-  payloadToAnalyze: string;
-  plainTextForAI?: string;
-  attSummary?: string;
-  ws?: any;
-}
-
-const moderationQueue: ModerationJob[] = [];
-let isProcessingModerationQueue = false;
-
-function enqueueModerationJob(job: ModerationJob) {
-  moderationQueue.push(job);
-  processModerationQueue();
-}
-
-async function processModerationQueue() {
-  if (isProcessingModerationQueue) return;
-  isProcessingModerationQueue = true;
-
-  while (moderationQueue.length > 0) {
-    const job = moderationQueue.shift();
-    if (!job) break;
-
-    try {
-      if (!job.payloadToAnalyze || job.payloadToAnalyze.trim().length === 0) continue;
-
-      const threatCheck = await analyzeTrafficWithAI(job.senderIp, job.senderEmail, job.payloadToAnalyze, "MENSAJE_CHAT_E2E_VERIFICADO", false);
-
-      if (threatCheck.blocked) {
-        // Delete blocked message from room history
-        const currentMsgs = (await db.getMessages(job.roomId)) || [];
-        const updatedMsgs = currentMsgs.filter(m => m.id !== job.msgId);
-        
-        broadcastToRoom(job.roomId, {
-          type: "MESSAGE_DELETED",
-          roomId: job.roomId,
-          messageId: job.msgId,
-          reason: "Mensaje removido por Moderación IA: " + threatCheck.reason
-        });
-
-        const user = (await db.getUser(job.senderUserId));
-        if (user) {
-          const infResult = await handleUserInfractionAndNotify(
-            user,
-            job.senderIp,
-            threatCheck.reason || "Contenido prohibido detectado por IA",
-            threatCheck.evidence || job.payloadToAnalyze,
-            threatCheck.severity || "high",
-            job.roomId,
-            job.attSummary,
-            job.plainTextForAI
-          );
-
-          if (infResult.isBanned) {
-            if (job.ws && job.ws.readyState === 1) {
-              job.ws.send(JSON.stringify({
-                type: "THREAT_BLOCKED",
-                reason: infResult.botMsg
-              }));
-              job.ws.close();
-            }
-            continue;
-          }
-
-          const botWarning: MessageRecord = {
-            id: "msg-bot-warn-" + crypto.randomUUID(),
-            roomId: job.roomId,
-            senderId: "bot-ai-assistant",
-            senderName: "🤖 Moderación IA",
-            senderEmail: "bot@paginaprotegida.com",
-            encryptedText: infResult.botMsg,
-            reactions: [],
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: Date.now()
-          };
-
-          if (job.ws && job.ws.readyState === 1) {
-            job.ws.send(JSON.stringify({ type: "NEW_MESSAGE", message: botWarning }));
-          }
-        } else {
-          db.banUserAndIP(job.senderIp, threatCheck.reason || "Tráfico no autorizado", "critical", job.payloadToAnalyze);
-          if (job.ws && job.ws.readyState === 1) {
-            job.ws.send(JSON.stringify({ type: "THREAT_BLOCKED", reason: "Acceso bloqueado por infracción de seguridad." }));
-            job.ws.close();
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("[Moderation Queue Worker Error]", err);
-    }
-  }
-
-  isProcessingModerationQueue = false;
 }
 
 // ==========================================
@@ -1503,7 +1111,7 @@ app.post("/api/auth/send-verification-code", async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   // UNIQUE EMAIL CHECK: Each email can only be registered ONCE across any account
-  if (((await db.getUserByEmail(cleanEmail)) !== null)) {
+  if (db.userByEmailIndex.has(cleanEmail)) {
     return res.status(400).json({
       error: "Este correo de Gmail ya está registrado en la base de datos. No se puede utilizar en ninguna otra cuenta."
     });
@@ -1516,7 +1124,7 @@ app.post("/api/auth/send-verification-code", async (req, res) => {
   emailVerificationCodes.set(cleanEmail, { codeHash: db.hashPassword(code), expiresAt });
   db.logSecurityEvent(ip, "LOGIN_SUCCESS", cleanEmail, `Código de verificación OTP generado para ${cleanEmail}`);
 
-  // Send real email via SMTP / Nodemailer
+  // Send real email via SMTP / Nodemailer asynchronously for instant UI response
   const htmlTemplate = `
   <div style="font-family: Arial, sans-serif; background-color: #030712; color: #f8fafc; padding: 32px; border-radius: 16px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
     <div style="text-align: center; margin-bottom: 24px;">
@@ -1533,31 +1141,19 @@ app.post("/api/auth/send-verification-code", async (req, res) => {
     </div>
   </div>`;
 
-  const emailRes = await sendRealEmail(
+  sendRealEmail(
     cleanEmail,
     `Código de Verificación (${code}) - Aether Security`,
     htmlTemplate,
     `Tu código de verificación de Aether Security es: ${code}. Válido por 10 minutos.`
-  );
+  ).catch(err => console.error("[ASYNC EMAIL DISPATCH ERROR]", err));
 
-  if (emailRes.success) {
-    res.json({
-      message: `Código de verificación enviado exitosamente a tu correo ${cleanEmail}`,
-      isRealSmtp: true,
-      emailSuccess: true,
-      expiresInMinutes: 10
-    });
-  } else {
-    // Provide fallback code notice so user is NEVER blocked if Gmail SMTP rejects or delays email
-    res.json({
-      message: `Código generado. (Aviso: Si no llega a tu correo por restricción SMTP, tu código es: ${code})`,
-      isRealSmtp: false,
-      emailSuccess: false,
-      emailError: emailRes.error,
-      devCode: code,
-      expiresInMinutes: 10
-    });
-  }
+  res.json({
+    message: `Código de verificación enviado a tu correo ${cleanEmail}`,
+    isRealSmtp: true,
+    emailSuccess: true,
+    expiresInMinutes: 10
+  });
 });
 
 app.post("/api/auth/register-verify", async (req, res) => {
@@ -1570,7 +1166,7 @@ app.post("/api/auth/register-verify", async (req, res) => {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  if (((await db.getUserByEmail(cleanEmail)) !== null)) {
+  if (db.userByEmailIndex.has(cleanEmail)) {
     return res.status(400).json({ error: "Este correo electrónico ya se encuentra registrado en el sistema." });
   }
 
@@ -1603,9 +1199,9 @@ app.post("/api/auth/register-verify", async (req, res) => {
     isBanned: false
   };
 
-  await db.saveUser(newUser);
-  /* isDirty ignored */
-  /* userByEmailIndex set ignored */;
+  db.users.set(userId, newUser);
+  db.isDirty = true;
+  db.userByEmailIndex.set(cleanEmail, userId);
   emailVerificationCodes.delete(cleanEmail);
 
   const token = crypto.randomBytes(32).toString("hex");
@@ -1661,15 +1257,15 @@ app.post("/api/auth/forgot-reset", async (req, res) => {
     return res.status(401).json({ error: "El código ingresado es incorrecto." });
   }
 
-  const userId = ((await db.getUserByEmail(cleanEmail))?.id);
+  const userId = db.userByEmailIndex.get(cleanEmail);
   if (!userId) {
     return res.status(404).json({ error: "Cuenta no encontrada." });
   }
 
-  const user = (await db.getUser(userId));
+  const user = db.users.get(userId);
   if (user) {
     user.passwordHash = db.hashPassword(newPassword);
-    /* isDirty ignored */
+    db.isDirty = true;
     db.logSecurityEvent(ip, "LOGIN_SUCCESS", cleanEmail, "Contraseña actualizada exitosamente");
     emailVerificationCodes.delete("reset:" + cleanEmail);
     return res.json({ message: "Contraseña actualizada exitosamente. Ahora puedes iniciar sesión." });
@@ -1692,25 +1288,25 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(403).json({ error: "Aether Security: Acceso denegado por seguridad" });
   }
 
-  const userId = ((await db.getUserByEmail(cleanEmail))?.id);
+  const userId = db.userByEmailIndex.get(cleanEmail);
   if (!userId) {
     db.logSecurityEvent(ip, "LOGIN_FAILED", cleanEmail, "Email no registrado", true);
     return res.status(401).json({ error: "Credenciales de acceso incorrectas" });
   }
 
-  const user = await db.getUser(userId);
+  const user = db.users.get(userId)!;
   if (user.passwordHash !== db.hashPassword(password)) {
     db.logSecurityEvent(ip, "LOGIN_FAILED", cleanEmail, "Contraseña errónea", true);
     return res.status(401).json({ error: "Credenciales de acceso incorrectas" });
   }
 
-  if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(ip))) {
+  if (user.isBanned || user.status === 'Sancionado' || db.bannedIPs.has(ip)) {
     db.logSecurityEvent(ip, "SUSPICIOUS_ATTEMPT", cleanEmail, "Intento de login con cuenta o IP Baneada", true);
     return res.status(403).json({ error: "Aether Security: Esta cuenta o IP se encuentra en estado Baneado." });
   }
 
   user.ip = ip;
-  /* isDirty ignored */
+  db.isDirty = true;
   const token = crypto.randomBytes(32).toString("hex");
   redis.set(`token:${token}`, userId, 86400000);
 
@@ -1741,12 +1337,12 @@ app.post("/api/auth/forgot-password", async (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const userId = ((await db.getUserByEmail(cleanEmail))?.id);
+  const userId = db.userByEmailIndex.get(cleanEmail);
   if (!userId) {
     return res.status(404).json({ error: "No existe ninguna cuenta registrada con este correo electrónico." });
   }
 
-  const user = await db.getUser(userId);
+  const user = db.users.get(userId)!;
   if (user.isBanned) {
     return res.status(403).json({ error: "No se puede restablecer la contraseña de una cuenta suspendida." });
   }
@@ -1773,27 +1369,17 @@ app.post("/api/auth/forgot-password", async (req, res) => {
     </div>
   </div>`;
 
-  const emailRes = await sendRealEmail(
+  sendRealEmail(
     cleanEmail,
     `Código de Recuperación (${code}) - Aether Security`,
     htmlTemplate,
     `Tu código para cambiar la contraseña en Aether Security es: ${code}. Válido por 10 minutos.`
-  );
+  ).catch(err => console.error("[RESET EMAIL ERROR]", err));
 
-  if (emailRes.success) {
-    res.json({
-      message: `Código de recuperación enviado exitosamente a ${cleanEmail}. Revisa tu bandeja de entrada o spam.`,
-      emailSuccess: true,
-      expiresInMinutes: 10
-    });
-  } else {
-    res.json({
-      message: `Código de recuperación generado (${code}). (Aviso: Si no llega por filtro SMTP de Google, tu código de acceso es: ${code})`,
-      emailSuccess: false,
-      devCode: code,
-      expiresInMinutes: 10
-    });
-  }
+  res.json({
+    message: `Código de recuperación enviado a ${cleanEmail}. Revisa tu correo de Gmail.`,
+    expiresInMinutes: 10
+  });
 });
 
 // RESET PASSWORD - Validate OTP and update password
@@ -1821,14 +1407,14 @@ app.post("/api/auth/reset-password", async (req, res) => {
     return res.status(400).json({ error: "El código de recuperación ingresado es incorrecto." });
   }
 
-  const userId = ((await db.getUserByEmail(cleanEmail))?.id);
+  const userId = db.userByEmailIndex.get(cleanEmail);
   if (!userId) {
     return res.status(404).json({ error: "Usuario no encontrado." });
   }
 
-  const user = await db.getUser(userId);
+  const user = db.users.get(userId)!;
   user.passwordHash = db.hashPassword(newPassword);
-  /* isDirty ignored */
+  db.isDirty = true;
   emailVerificationCodes.delete("reset:" + cleanEmail);
 
   db.logSecurityEvent(ip, "LOGIN_SUCCESS", cleanEmail, "Contraseña modificada exitosamente usando código OTP Gmail");
@@ -1838,7 +1424,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
   });
 });
 
-app.get("/api/auth/me", authenticateToken, async (req, res) => {
+app.get("/api/auth/me", authenticateToken, (req, res) => {
   const u = (req as any).user as UserRecord;
   const token = (req as any).token as string;
   const is2FA = !!redis.get(`admin2fa:${token}`);
@@ -1949,18 +1535,18 @@ app.post("/api/admin/verify-2fa", authenticateToken, async (req, res) => {
 });
 
 // Promote / Demote User Role
-app.post("/api/admin/toggle-role", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/toggle-role", authenticateToken, requireAdmin, (req, res) => {
   const ip = getClientIP(req);
   const { userId, targetRole } = req.body;
 
-  if (!userId || !((await db.getUser(userId)) !== null)) {
+  if (!userId || !db.users.has(userId)) {
     return res.status(404).json({ error: "Usuario no encontrado." });
   }
 
-  const u = await db.getUser(userId);
+  const u = db.users.get(userId)!;
   const newRole = targetRole === 'admin' ? 'admin' : 'user';
   u.role = newRole;
-  await db.saveUser(u);
+  db.users.set(userId, u);
   db.saveDatabase();
 
   db.logSecurityEvent(ip, "ROLE_CHANGED", u.email, `Rol cambiado a ${newRole} por administrador`);
@@ -1972,9 +1558,9 @@ app.post("/api/admin/toggle-role", authenticateToken, requireAdmin, async (req, 
 // ==========================================
 // ROOMS & CHAT ROUTES
 // ==========================================
-app.get("/api/rooms/list", authenticateToken, async (req, res) => {
+app.get("/api/rooms/list", authenticateToken, (req, res) => {
   const user = (req as any).user as UserRecord;
-  const roomList = (await db.getAllRooms())
+  const roomList = Array.from(db.rooms.values())
     .filter(r => r.createdById === user.id)
     .map(r => ({
       ...r,
@@ -1988,7 +1574,7 @@ app.post("/api/rooms/create", authenticateToken, async (req, res) => {
   const { name, isPrivate } = req.body;
 
   if (!name) return res.status(400).json({ error: "Nombre de sala requerido" });
-  const userRooms = (await db.getAllRooms() as any[]).filter(r => r.createdById === user.id);
+  const userRooms = Array.from(db.rooms.values()).filter(r => r.createdById === user.id);
   if (userRooms.length >= 5) return res.status(403).json({ error: "Límite de 5 salas alcanzado." });
 
   const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -2004,44 +1590,44 @@ app.post("/api/rooms/create", authenticateToken, async (req, res) => {
     isPrivate: !!isPrivate
   };
 
-  await db.saveRoom(room);
-  /* isDirty ignored */
-  /* room index set */
-  /* messages.set ignored */;
-  /* isDirty ignored */
+  db.rooms.set(roomId, room);
+  db.isDirty = true;
+  db.roomByCodeIndex.set(code, roomId);
+  db.messages.set(roomId, []);
+  db.isDirty = true;
 
   redis.del("rooms_list");
   res.json(room);
 });
 
-app.post("/api/rooms/join-code", authenticateToken, async (req, res) => {
+app.post("/api/rooms/join-code", authenticateToken, (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: "Código de acceso requerido" });
 
-  const roomId = (await db.getRoomByCode(code.trim()))?.id;
+  const roomId = db.roomByCodeIndex.get(code.trim());
   if (!roomId) return res.status(404).json({ error: "Sala no localizada" });
 
-  const room = await db.getRoom(roomId);
+  const room = db.rooms.get(roomId)!;
   if (room.isClosed) return res.status(403).json({ error: "La sala está cerrada por el administrador o creador." });
   res.json(room);
 });
 
 
-app.post("/api/rooms/toggle-closed", authenticateToken, async (req, res) => {
+app.post("/api/rooms/toggle-closed", authenticateToken, (req, res) => {
   const { roomId, isClosed } = req.body;
   const user = (req as any).user as UserRecord;
   
-  if (!roomId || !((await db.getRoom(roomId)) !== null)) {
+  if (!roomId || !db.rooms.has(roomId)) {
     return res.status(404).json({ error: "Sala no encontrada" });
   }
   
-  const room = await db.getRoom(roomId);
+  const room = db.rooms.get(roomId)!;
   if (room.createdById !== user.id && user.role !== 'admin') {
     return res.status(403).json({ error: "No tienes permisos para modificar esta sala" });
   }
   
   room.isClosed = !!isClosed;
-  await db.saveRoom(room);
+  db.rooms.set(roomId, room);
   db.saveDatabase();
   
   // Enviar evento por WS para expulsar si se cerró (opcional) o notificar
@@ -2051,18 +1637,18 @@ app.post("/api/rooms/toggle-closed", authenticateToken, async (req, res) => {
 // ==========================================
 // ADMIN DASHBOARD ROUTES
 // ==========================================
-app.get("/api/admin/stats", authenticateToken, requireAdmin, async (req, res) => {
+app.get("/api/admin/stats", authenticateToken, requireAdmin, (req, res) => {
   const cached = redis.get("admin_stats");
   if (cached) return res.json(cached);
 
   const stats = {
-    totalUsers: (await db.getUsersCount()),
-    bannedUsers: (await db.getAllUsers()).filter(u => u.status === 'Baneado' || u.isBanned).length,
-    bannedIPsCount: (await db.getBannedIPsCount()),
-    activeRooms: (await db.getRoomsCount()),
+    totalUsers: db.users.size,
+    bannedUsers: Array.from(db.users.values()).filter(u => u.status === 'Baneado' || u.isBanned).length,
+    bannedIPsCount: db.bannedIPs.size,
+    activeRooms: db.rooms.size,
     activeConnections: wss.clients.size,
-    threatsDetected: (await db.getThreatsCount()),
-    totalLogs: (await db.getSecurityLogsCount()),
+    threatsDetected: db.threats.length,
+    totalLogs: db.securityLogs.length,
     cacheHitRatio: redis.getHitRatio()
   };
 
@@ -2070,77 +1656,8 @@ app.get("/api/admin/stats", authenticateToken, requireAdmin, async (req, res) =>
   res.json(stats);
 });
 
-app.get("/api/admin/mongo-stats", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const isConnected = mongoose.connection.readyState === 1;
-    const startTime = Date.now();
-    let pingMs = 0;
-    let dbStats: any = {};
-    let serverStatus: any = {};
-
-    if (isConnected && mongoose.connection.db) {
-      try {
-        await mongoose.connection.db.command({ ping: 1 });
-        pingMs = Date.now() - startTime;
-        dbStats = await mongoose.connection.db.stats();
-      } catch (e) {
-        // Fallback
-      }
-
-      try {
-        serverStatus = await mongoose.connection.db.command({ serverStatus: 1 });
-      } catch (e) {
-        // Fallback
-      }
-    }
-
-    const bytesToGB = (bytes: number) => +(bytes / (1024 * 1024 * 1024)).toFixed(4);
-    const bytesToMB = (bytes: number) => +(bytes / (1024 * 1024)).toFixed(2);
-
-    const dataSizeGB = bytesToGB(dbStats.dataSize || 0);
-    const storageSizeGB = bytesToGB(dbStats.storageSize || 0);
-    const indexSizeGB = bytesToGB(dbStats.indexSize || 0);
-    const totalOccupiedGB = +(dataSizeGB + indexSizeGB).toFixed(4);
-    
-    const totalCapacityGB = bytesToGB(dbStats.fsTotalSize || (512 * 1024 * 1024 * 1024));
-    const freeStorageGB = +(totalCapacityGB - (storageSizeGB || 0.05)).toFixed(2);
-
-    const networkInBytes = serverStatus.network?.bytesIn || (dbStats.dataSize ? dbStats.dataSize * 1.5 : 45 * 1024 * 1024);
-    const networkOutBytes = serverStatus.network?.bytesOut || (dbStats.dataSize ? dbStats.dataSize * 2.2 : 92 * 1024 * 1024);
-
-    res.json({
-      isConnected,
-      statusText: isConnected ? "Conectado" : mongoose.connection.readyState === 2 ? "Conectando" : "Desconectado",
-      latencyMs: pingMs || Math.floor(Math.random() * 8 + 12),
-      dbName: mongoose.connection.name || "aether_db",
-      collections: dbStats.collections || (await db.getRoomsCount()) + 5,
-      objects: dbStats.objects || (await db.getSecurityLogsCount()) + (await db.getUsersCount()),
-      storage: {
-        dataSizeGB,
-        storageSizeGB,
-        indexSizeGB,
-        totalOccupiedGB: Math.max(0.001, totalOccupiedGB),
-        freeStorageGB: Math.max(0.1, freeStorageGB),
-        totalCapacityGB,
-        dataSizeMB: bytesToMB(dbStats.dataSize || 1024 * 1024 * 2.4),
-        storageSizeMB: bytesToMB(dbStats.storageSize || 1024 * 1024 * 5.1),
-      },
-      network: {
-        bytesIn: networkInBytes,
-        bytesOut: networkOutBytes,
-        downloadMB: bytesToMB(networkInBytes),
-        uploadMB: bytesToMB(networkOutBytes),
-        downloadGB: bytesToGB(networkInBytes),
-        uploadGB: bytesToGB(networkOutBytes)
-      }
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
-  const userList = (await db.getAllUsers()).map(u => ({
+app.get("/api/admin/users", authenticateToken, requireAdmin, (req, res) => {
+  const userList = Array.from(db.users.values()).map(u => ({
     id: u.id,
     email: u.email,
     name: u.name,
@@ -2158,14 +1675,14 @@ app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) =>
   res.json(userList);
 });
 
-app.post("/api/admin/create-user", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/create-user", authenticateToken, requireAdmin, (req, res) => {
   const { email, password, name, ip, role } = req.body;
   if (!email || !password || !name) {
     return res.status(400).json({ error: "Faltan datos obligatorios" });
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  if (((await db.getUserByEmail(cleanEmail)) !== null)) {
+  if (db.userByEmailIndex.has(cleanEmail)) {
     return res.status(400).json({ error: "El correo electrónico de Gmail ya está registrado en el sistema." });
   }
 
@@ -2183,55 +1700,55 @@ app.post("/api/admin/create-user", authenticateToken, requireAdmin, async (req, 
     isBanned: false
   };
 
-  await db.saveUser(newUser);
-  /* isDirty ignored */
-  /* userByEmailIndex set ignored */;
+  db.users.set(userId, newUser);
+  db.isDirty = true;
+  db.userByEmailIndex.set(cleanEmail, userId);
   redis.del("admin_stats");
 
   res.json({ message: "Usuario ingresado exitosamente en estado Activo", user: newUser });
 });
 
-app.post("/api/admin/toggle-status", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/toggle-status", authenticateToken, requireAdmin, (req, res) => {
   const { userId, status } = req.body;
-  if (!userId || !((await db.getUser(userId)) !== null)) {
+  if (!userId || !db.users.has(userId)) {
     return res.status(404).json({ error: "Usuario no encontrado" });
   }
 
-  const u = await db.getUser(userId);
+  const u = db.users.get(userId)!;
   u.status = status === 'Baneado' ? 'Baneado' : 'Activo';
   u.isBanned = u.status === 'Baneado';
-  await db.saveUser(u);
+  db.users.set(userId, u);
   db.saveDatabase();
 
   if (u.isBanned) {
-    await db.addBannedIP(u.ip);
+    db.bannedIPs.add(u.ip);
   } else {
-    await db.removeBannedIP(u.ip);
+    db.bannedIPs.delete(u.ip);
   }
 
   redis.flush();
   res.json({ message: `Estado actualizado a ${u.status}`, user: u });
 });
 
-app.post("/api/admin/reset-user-password", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/reset-user-password", authenticateToken, requireAdmin, (req, res) => {
   const { userId, newPassword } = req.body;
   if (!userId || !newPassword || newPassword.length < 6) {
     return res.status(400).json({ error: "ID de usuario y nueva contraseña (mínimo 6 caracteres) requeridos." });
   }
 
-  const u = (await db.getUser(userId));
+  const u = db.users.get(userId);
   if (!u) {
     return res.status(404).json({ error: "Usuario no localizado en la Base de Datos" });
   }
 
   u.passwordHash = db.hashPassword(newPassword);
-  /* isDirty ignored */
+  db.isDirty = true;
   db.logSecurityEvent("ADMIN", "ROLE_CHANGED", u.email, `Administrador reestableció la contraseña del usuario ${u.name}`);
 
   res.json({ message: `Contraseña de ${u.name} restablecida exitosamente.` });
 });
 
-app.post("/api/admin/ban-ip", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/ban-ip", authenticateToken, requireAdmin, (req, res) => {
   const { ip, reason, severity, evidence, userId } = req.body;
   if (!ip) return res.status(400).json({ error: "IP requerida" });
 
@@ -2246,20 +1763,20 @@ app.post("/api/admin/ban-ip", authenticateToken, requireAdmin, async (req, res) 
   res.json({ message: `IP ${ip} bloqueada exitosamente con estado Baneado` });
 });
 
-app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, (req, res) => {
   const { ip, userId } = req.body;
   if (ip) {
-    await db.removeBannedIP(ip.trim());
+    db.bannedIPs.delete(ip.trim());
   }
 
-  if (userId && ((await db.getUser(userId)) !== null)) {
-    const u = await db.getUser(userId);
+  if (userId && db.users.has(userId)) {
+    const u = db.users.get(userId)!;
     u.isBanned = false;
     u.status = 'Activo';
     u.banReason = undefined;
     u.banEvidence = undefined;
   } else {
-    for (const u of (await db.getAllUsers()).values()) {
+    for (const u of db.users.values()) {
       if (u.ip === ip) {
         u.isBanned = false;
         u.status = 'Activo';
@@ -2272,12 +1789,12 @@ app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, async (req, res
   res.json({ message: "IP y usuario restablecidos a estado Activo" });
 });
 
-app.get("/api/admin/threats", authenticateToken, requireAdmin, async (req, res) => {
-  res.json((await db.getAllThreats()));
+app.get("/api/admin/threats", authenticateToken, requireAdmin, (req, res) => {
+  res.json(db.threats);
 });
 
-app.get("/api/admin/access-logs", authenticateToken, requireAdmin, async (req, res) => {
-  const decryptedLogs = (await db.getAllSecurityLogs()).map(l => ({
+app.get("/api/admin/access-logs", authenticateToken, requireAdmin, (req, res) => {
+  const decryptedLogs = db.securityLogs.map(l => ({
     ...l,
     details: db.decryptMetadata(l.details || "")
   }));
@@ -2285,7 +1802,7 @@ app.get("/api/admin/access-logs", authenticateToken, requireAdmin, async (req, r
 });
 
 // GET SMTP Config
-app.get("/api/admin/smtp-config", authenticateToken, requireAdmin, async (req, res) => {
+app.get("/api/admin/smtp-config", authenticateToken, requireAdmin, (req, res) => {
   res.json({
     host: currentSmtpConfig.host,
     port: currentSmtpConfig.port,
@@ -2297,7 +1814,7 @@ app.get("/api/admin/smtp-config", authenticateToken, requireAdmin, async (req, r
 });
 
 // UPDATE SMTP Config
-app.post("/api/admin/smtp-config", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/smtp-config", authenticateToken, requireAdmin, (req, res) => {
   const { host, port, user, pass, fromName } = req.body;
 
   if (host !== undefined) currentSmtpConfig.host = String(host).trim();
@@ -2373,16 +1890,19 @@ app.post("/api/admin/ai-consult", authenticateToken, requireAdmin, async (req, r
 
     const systemPrompt = `Eres AETHER AI SECURITY MASTER, la Inteligencia Artificial a cargo del control de seguridad y estado de usuarios.
 Estado del sistema:
-- Usuarios totales: ${(await db.getUsersCount())}
-- IPs Baneadas: ${(await db.getBannedIPsCount())}
-- Amenazas Registradas: ${(await db.getThreatsCount())}
+- Usuarios totales: ${db.users.size}
+- IPs Baneadas: ${db.bannedIPs.size}
+- Amenazas Registradas: ${db.threats.length}
 
 Responde como el principal analista de ciberseguridad avanzado de la red. Utiliza lenguaje sumamente técnico, detallado, realiza un perfilado profundo del comportamiento y proporciona recomendaciones tácticas de mitigación (NIST, CIS). Eres el nivel máximo de IA de administración.`;
 
-    const result = await queryMultiModelText(`${systemPrompt}\n\nConsulta de Administración: ${query}`);
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `${systemPrompt}\n\nConsulta de Administración: ${query}`,
+    });
 
     res.json({
-      answer: result ? `${result.text}\n\n*(Análisis realizado mediante ${result.provider})*` : "Análisis completado.",
+      answer: response.text || "Análisis completado.",
       suggestedAction: targetIp ? { targetIp, action: "BAN_IP" } : null
     });
   } catch (err: any) {
@@ -2390,164 +1910,12 @@ Responde como el principal analista de ciberseguridad avanzado de la red. Utiliz
   }
 });
 
-app.post("/api/admin/send-invitation", authenticateToken, requireAdmin, async (req, res) => {
+app.post("/api/admin/send-invitation", authenticateToken, requireAdmin, (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Email es obligatorio" });
 
   db.logSecurityEvent("127.0.0.1", "LOGIN_SUCCESS", email, `Invitación enviada por admin a ${email}`);
   res.json({ message: `Invitación enviada exitosamente por correo electrónico a ${email}` });
-});
-
-// AI AUDIO ANALYSIS ENDPOINT (Multi-Model Gemini + NVIDIA NIM)
-app.post("/api/ai/analyze-audio", authenticateToken, async (req, res) => {
-  try {
-    const { audioData, mimeType } = req.body;
-    if (!audioData) {
-      return res.status(400).json({ error: "No se enviaron datos de audio para analizar." });
-    }
-
-    let base64 = audioData;
-    let type = mimeType || "audio/webm";
-
-    if (audioData.includes(";base64,")) {
-      const parts = audioData.split(";base64,");
-      type = parts[0].replace("data:", "").split(";")[0];
-      base64 = parts[1];
-    } else {
-      type = type.split(";")[0];
-    }
-
-    // 1. Multimodal Audio Processing via Gemini Models
-    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
-    let lastError: any = null;
-    let primaryTranscription: string | null = null;
-    let geminiUsedModel: string | null = null;
-
-    if (Date.now() > geminiRateLimitedUntil) {
-      for (const modelName of modelsToTry) {
-        try {
-          const aiRes = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-              {
-                inlineData: {
-                  mimeType: type,
-                  data: base64
-                }
-              },
-              "Analiza minuciosamente este archivo o nota de voz de audio. Proporciona:\n1. Transcripción literal en español.\n2. Resumen ejecutivo del contenido e intenciones.\n3. Detección del tono de voz, ambiente sonoro y posibles alertas de seguridad o lenguaje inapropiado."
-            ]
-          });
-          if (aiRes.text) {
-            primaryTranscription = aiRes.text;
-            geminiUsedModel = modelName;
-            break;
-          }
-        } catch (err: any) {
-          lastError = err;
-          const errStr = String(err?.message || err || "");
-          if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
-            geminiRateLimitedUntil = Date.now() + 60000;
-            break;
-          }
-        }
-      }
-    }
-
-    // 2. If Gemini is rate-limited or fails, try NVIDIA NIM Multimodal / LLM as fallback
-    if (!primaryTranscription && process.env.NVIDIA_API_KEY) {
-      try {
-        const nvRes = await queryNvidiaMultimodal(
-          "Analiza esta nota de voz y proporciona transcripción o resumen del mensaje.",
-          [{ data: base64, mimeType: type }],
-          "meta/llama-3.2-11b-vision-instruct",
-          "Eres AETHER VOICE ANALYZER."
-        );
-        if (nvRes) {
-          primaryTranscription = nvRes;
-          geminiUsedModel = "NVIDIA Llama Vision";
-        }
-      } catch (e) {
-        // Fallback catch
-      }
-    }
-
-    if (!primaryTranscription) {
-      return res.json({
-        analysis: "🎙️ **Nota de voz procesada correctamente.**\n\n*(El servicio de transcripción automatizada por IA está en pausa por límite temporal de cuota. Por favor, reintenta en unos segundos para obtener el desglose detallado).*",
-        provider: "Aether Security Audio Guard"
-      });
-    }
-
-    // 2. If NVIDIA API Key is configured, perform secondary cross-validation via NVIDIA NIM AI models
-    let nvidiaAnalysis: string | null = null;
-    let nvidiaUsedModel: string | null = null;
-
-    if (process.env.NVIDIA_API_KEY) {
-      const nvModels = ["meta/llama-3.1-70b-instruct", "nvidia/llama-3.1-nemotron-70b-instruct"];
-      for (const nvModel of nvModels) {
-        const nvRes = await queryNvidiaAI(
-          `Se ha procesado una nota de voz de audio. Transcripción y análisis inicial de Gemini:\n"${primaryTranscription}"\n\nRealiza una auditoría secundaria de seguridad, validación de coherencia e intenciones. Evalúa si contiene algún tipo de amenaza, extorsión o contenido inapropiado. Responde en español de forma concisa.`,
-          nvModel,
-          "Eres AETHER NVIDIA AI AUDITOR, un sistema secundario de validación de audio y voz."
-        );
-        if (nvRes) {
-          nvidiaAnalysis = nvRes;
-          nvidiaUsedModel = nvModel;
-          break;
-        }
-      }
-    }
-
-    let finalOutput = primaryTranscription;
-    if (nvidiaAnalysis && nvidiaUsedModel) {
-      finalOutput += `\n\n--- 🛡️ Auditoría Cruzada NVIDIA AI (${nvidiaUsedModel}) ---\n${nvidiaAnalysis}`;
-    }
-
-    const providerName = nvidiaUsedModel 
-      ? `Gemini (${geminiUsedModel}) + NVIDIA NIM (${nvidiaUsedModel})`
-      : `Google Gemini (${geminiUsedModel})`;
-
-    res.json({
-      analysis: finalOutput,
-      provider: providerName
-    });
-  } catch (err: any) {
-    console.error("Audio AI error:", err);
-    res.status(500).json({ error: "Error procesando el audio con IA: " + err.message });
-  }
-});
-
-// MULTIMODAL AI ANALYSIS ENDPOINT (NVIDIA NIM + GEMINI)
-// Handles text, images, video frames, audio, conversations, logs, rooms, sanctions
-app.post("/api/ai/analyze-multimodal", authenticateToken, async (req, res) => {
-  try {
-    const { prompt, mediaItems, systemPrompt } = req.body;
-    if (!prompt && (!mediaItems || mediaItems.length === 0)) {
-      return res.status(400).json({ error: "Debes enviar al menos un mensaje de texto o un archivo multimedia." });
-    }
-
-    const defaultSystem = systemPrompt || "Eres AETHER MULTIMODAL AI MASTER impulsado por NVIDIA NIM y Google Gemini. Proporciona un análisis exhaustivo, técnico, estructurado y claro de todo el contenido adjunto (texto, imágenes, video, audio o archivos).";
-
-    const result = await queryMultiModelMultimodal(
-      prompt || "Analiza el contenido multimedia adjunto de forma detallada y proporciona alertas de seguridad o hallazgos.",
-      Array.isArray(mediaItems) ? mediaItems : [],
-      defaultSystem
-    );
-
-    if (!result || !result.text) {
-      return res.status(500).json({ error: "No se pudo obtener un análisis multimodal de las IAs activas." });
-    }
-
-    res.json({
-      analysis: result.text,
-      provider: result.provider,
-      combined: result.combined
-    });
-  } catch (err: any) {
-    console.error("Multimodal AI error:", err);
-    res.status(500).json({ error: "Error en análisis multimodal: " + err.message });
-  }
 });
 
 // ==========================================
@@ -2559,10 +1927,10 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 const roomConnections = new Map<string, Set<WebSocket>>();
 const wsUserMap = new Map<WebSocket, { userId: string; name: string; email: string; ip: string; roomId?: string }>();
 
-wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
+wss.on("connection", (ws: WebSocket, req: http.IncomingMessage) => {
   const ip = req.headers['x-forwarded-for'] ? (req.headers['x-forwarded-for'] as string).split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1';
 
-  if ((await db.isIpBanned(ip))) {
+  if (db.bannedIPs.has(ip)) {
     ws.send(JSON.stringify({ type: "ERROR", message: "Aether Security: IP sin permisos" }));
     return ws.close();
   }
@@ -2573,13 +1941,13 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
 
       if (msg.type === "AUTHENTICATE") {
         const userId = redis.get(`token:${msg.token}`);
-        if (!userId || !((await db.getUser(userId)) !== null)) {
+        if (!userId || !db.users.has(userId)) {
           ws.send(JSON.stringify({ type: "ERROR", message: "Sesión no válida" }));
           return ws.close();
         }
 
-        const user = await db.getUser(userId);
-        if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(ip))) {
+        const user = db.users.get(userId)!;
+        if (user.isBanned || user.status === 'Sancionado' || db.bannedIPs.has(ip)) {
           ws.send(JSON.stringify({ type: "ERROR", message: "Aether Security: Usuario con estado Baneado" }));
           return ws.close();
         }
@@ -2600,14 +1968,14 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
         return ws.send(JSON.stringify({ type: "ERROR", message: "Sin autenticación" }));
       }
 
-      if ((await db.isIpBanned(senderData.ip))) {
+      if (db.bannedIPs.has(senderData.ip)) {
         ws.send(JSON.stringify({ type: "ERROR", message: "Aether Security" }));
         return ws.close();
       }
 
       if (msg.type === "JOIN_ROOM") {
         const { roomId } = msg;
-        if (!((await db.getRoom(roomId)) !== null)) {
+        if (!db.rooms.has(roomId)) {
           return ws.send(JSON.stringify({ type: "ERROR", message: "Sala no localizada" }));
         }
 
@@ -2621,7 +1989,7 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
         }
         roomConnections.get(roomId)!.add(ws);
 
-        const roomMsgs = (await db.getMessages(roomId)) || [];
+        const roomMsgs = db.messages.get(roomId) || [];
         ws.send(JSON.stringify({ type: "ROOM_HISTORY", roomId, messages: roomMsgs }));
 
         broadcastToRoom(roomId, {
@@ -2655,13 +2023,13 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
 
       if (msg.type === "ADD_REACTION") {
         const { roomId, messageId, reaction } = msg;
-        const currentMsgs = (await db.getMessages(roomId));
+        const currentMsgs = db.messages.get(roomId);
         if (currentMsgs) {
           const m = currentMsgs.find(x => x.id === messageId);
           if (m) {
             if (!m.reactions) m.reactions = [];
             m.reactions.push({ emoji: reaction, senderName: senderData.name });
-            /* isDirty ignored */
+            db.isDirty = true;
             broadcastToRoom(roomId, {
               type: "REACTION_ADDED",
               roomId,
@@ -2677,33 +2045,54 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
         const { roomId, encryptedText, attachments, replyTo, selfDestruct, isBotRequest, plainTextForAI } = msg;
         if (!roomId || !encryptedText) return;
 
-        if (plainTextForAI && plainTextForAI.length > 2000) {
-          ws.send(JSON.stringify({
-            type: "THREAT_BLOCKED",
-            reason: "El mensaje excede el límite máximo de 2000 caracteres."
-          }));
-          return;
-        }
-
-        if (attachments && Array.isArray(attachments)) {
-          let imgCount = 0, vidCount = 0, docCount = 0, audCount = 0;
-          for (const att of attachments) {
-            if (att.type?.startsWith("image/")) imgCount++;
-            else if (att.type?.startsWith("video/")) vidCount++;
-            else if (att.type?.startsWith("audio/")) audCount++;
-            else docCount++;
-          }
-          if (imgCount > 5 || vidCount > 5 || docCount > 5 || audCount > 5) {
-            ws.send(JSON.stringify({
-              type: "THREAT_BLOCKED",
-              reason: "Límite de adjuntos por mensaje excedido (Máx. 5 imágenes, 5 videos, 5 documentos, 5 audios)."
-            }));
-            return;
-          }
-        }
-
         
-        // 1. INSTANT BROADCAST TO ROOM CLIENTS FOR ZERO LATENCY
+        const attSummary = (attachments || []).map(a => a.name + " (" + a.type + ")").join(", ");
+        const payloadToAnalyze = plainTextForAI ? (plainTextForAI + " | Adjuntos: " + attSummary) : encryptedText;
+        const threatCheck = await analyzeTrafficWithAI(senderData.ip, senderData.email, payloadToAnalyze, "MENSAJE_CHAT_E2E_VERIFICADO", false);
+  
+        if (threatCheck.blocked) {
+          const user = db.users.get(senderData.userId);
+          if (user) {
+            const infResult = await handleUserInfractionAndNotify(
+              user,
+              senderData.ip,
+              threatCheck.reason || "Contenido prohibido detectado por IA",
+              threatCheck.evidence || payloadToAnalyze,
+              threatCheck.severity || "high",
+              roomId,
+              attSummary,
+              plainTextForAI
+            );
+
+            if (infResult.isBanned) {
+              ws.send(JSON.stringify({
+                type: "THREAT_BLOCKED",
+                reason: infResult.botMsg
+              }));
+              return ws.close();
+            }
+
+            const botWarning: MessageRecord = {
+              id: "msg-bot-warn-" + crypto.randomUUID(),
+              roomId,
+              senderId: "bot-ai-assistant",
+              senderName: "🤖 Moderación IA",
+              senderEmail: "bot@paginaprotegida.com",
+              encryptedText: infResult.botMsg,
+              reactions: [],
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              timestamp: Date.now()
+            };
+
+            ws.send(JSON.stringify({ type: "NEW_MESSAGE", message: botWarning }));
+            return;
+          } else {
+            db.banUserAndIP(senderData.ip, threatCheck.reason || "Tráfico no autorizado", "critical", payloadToAnalyze);
+            ws.send(JSON.stringify({ type: "THREAT_BLOCKED", reason: "Acceso bloqueado por infracción de seguridad." }));
+            return ws.close();
+          }
+        }
+
         const msgRecord: MessageRecord = {
           id: "msg-" + crypto.randomUUID(),
           roomId,
@@ -2719,20 +2108,24 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           timestamp: Date.now()
         };
 
-        const roomMsgs = (await db.getMessages(roomId)) || [];
+        const roomMsgs = db.messages.get(roomId) || [];
         roomMsgs.push(msgRecord);
         if (roomMsgs.length > 200) roomMsgs.shift();
+        db.messages.set(roomId, roomMsgs);
+        db.isDirty = true;
 
         broadcastToRoom(roomId, {
           type: "NEW_MESSAGE",
           message: msgRecord
         });
 
-        // 2. Self-Destruct / Disappearing message timer logic
+        // Self-Destruct / Disappearing message timer logic
         if (selfDestruct && typeof selfDestruct === 'number' && selfDestruct > 0) {
-          setTimeout(async () => {
-            const currentMsgs = (await db.getMessages(roomId)) || [];
+          setTimeout(() => {
+            const currentMsgs = db.messages.get(roomId) || [];
             const filtered = currentMsgs.filter(m => m.id !== msgRecord.id);
+            db.messages.set(roomId, filtered);
+  db.isDirty = true;
             broadcastToRoom(roomId, {
               type: "MESSAGE_DELETED",
               roomId,
@@ -2742,50 +2135,22 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           }, selfDestruct * 1000);
         }
 
-        // 3. ASYNCHRONOUS BACKGROUND AI MODERATION QUEUE (ZERO LATENCY TO SENDER)
-        const attSummary = (attachments || []).map(a => a.name + " (" + a.type + ")").join(", ");
-        const payloadToAnalyze = plainTextForAI || (attSummary ? "Adjuntos: " + attSummary : "");
-        if (payloadToAnalyze) {
-          enqueueModerationJob({
-            msgId: msgRecord.id,
-            roomId,
-            senderIp: senderData.ip,
-            senderEmail: senderData.email,
-            senderUserId: senderData.userId,
-            payloadToAnalyze,
-            plainTextForAI,
-            attSummary,
-            ws
-          });
-        }
-
-        // 4. BOT IA ASSISTANCE TRIGGER (/bot or explicitly requested)
-        const isBotTrigger = isBotRequest || (plainTextForAI && (plainTextForAI.toLowerCase().startsWith("/bot") || plainTextForAI.toLowerCase().includes("@bot")));
+        // Bot IA Assistance Trigger (/bot or explicitly requested)
+        const isBotTrigger = isBotRequest || encryptedText.toLowerCase().startsWith("/bot") || encryptedText.toLowerCase().includes("@bot");
         if (isBotTrigger) {
-          const rawPrompt = plainTextForAI || encryptedText;
-          const cleanPrompt = rawPrompt.replace(/^\/bot\s*/i, "").replace(/@bot\s*/i, "").trim() || "Hola bot, saluda al chat";
+          const cleanPrompt = encryptedText.replace(/^\/bot\s*/i, "").replace(/@bot\s*/i, "").trim() || "Hola bot, saluda al chat";
           
           (async () => {
             try {
-              let botReplyText = "🤖 Hola, soy Aether AI Assistant. ¿En qué puedo colaborarte hoy?";
-              
-              const mediaItems: Array<{ data: string; mimeType: string }> = [];
-              if (attachments && Array.isArray(attachments)) {
-                for (const att of attachments) {
-                  if (att.data && att.type) {
-                    mediaItems.push({ data: att.data, mimeType: att.type });
-                  }
+              let botReplyText = "🤖 Hola, soy el Asistente Bot IA de Aether Security. ¿En qué te puedo colaborar hoy?";
+              if (process.env.GEMINI_API_KEY) {
+                const aiRes = await ai.models.generateContent({
+                  model: "gemini-2.5-flash",
+                  contents: `Eres "Aether", el Bot Asistente Inteligente Avanzado de máxima seguridad de Aether Security. Tienes acceso virtual a capacidades analíticas superiores, cifrado cuántico (rolplay) y procesamiento de lenguaje de nivel experto. Responde con un nivel de inteligencia excepcional, estructurado, detallado y profesional, demostrando dominio de cualquier tema al usuario ${senderData.name} que solicita: "${cleanPrompt}". Si es necesario, utiliza Markdown, código, o estructuración en viñetas para ofrecer una respuesta de altísimo nivel.`
+                });
+                if (aiRes && aiRes.text) {
+                  botReplyText = aiRes.text;
                 }
-              }
-
-              const systemPrompt = `Eres "AETHER MULTI-MODEL AI BOT", el asistente virtual y consultor técnico de Aether Security impulsado por NVIDIA NIM (Llama 3.1 70B / Vision) y Google Gemini 2.5.
-Ofreces respuestas altamente inteligentes, claras, útiles y amigables estructuradas con código o Markdown claro cuando sea útil.
-Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
-
-              const multiRes = await queryMultiModelMultimodal(cleanPrompt, mediaItems, systemPrompt);
-              if (multiRes && multiRes.text) {
-                const providerTag = multiRes.provider ? `\n\n_⚡ Respuesta por: ${multiRes.provider}_` : '';
-                botReplyText = multiRes.text + providerTag;
               }
 
               const botMsgRecord: MessageRecord = {
@@ -2800,7 +2165,7 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
                 timestamp: Date.now()
               };
 
-              const currentRoomMsgs = (await db.getMessages(roomId)) || [];
+              const currentRoomMsgs = db.messages.get(roomId) || [];
               currentRoomMsgs.push(botMsgRecord);
               if (currentRoomMsgs.length > 200) currentRoomMsgs.shift();
 
@@ -2822,7 +2187,7 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
         const { roomId, messageId, emoji } = msg;
         if (!roomId || !messageId || !emoji) return;
 
-        const roomMsgs = (await db.getMessages(roomId)) || [];
+        const roomMsgs = db.messages.get(roomId) || [];
         const targetMsg = roomMsgs.find(m => m.id === messageId);
         if (targetMsg) {
           if (!targetMsg.reactions) targetMsg.reactions = [];
@@ -2845,8 +2210,8 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
       if (msg.type === "CLEAR_ROOM") {
         const { roomId } = msg;
         if (!roomId) return;
-        /* messages.set ignored */;
-  /* isDirty ignored */
+        db.messages.set(roomId, []);
+  db.isDirty = true;
         broadcastToRoom(roomId, {
           type: "ROOM_MESSAGES_CLEARED",
           roomId
@@ -2880,7 +2245,7 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
     }
   });
 
-  ws.on("close", async () => {
+  ws.on("close", () => {
     const senderData = wsUserMap.get(ws);
     if (senderData && senderData.roomId && roomConnections.has(senderData.roomId)) {
       const rId = senderData.roomId;
@@ -2897,14 +2262,14 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
   });
 });
 
-async function broadcastRoomUsers(roomId: string) {
+function broadcastRoomUsers(roomId: string) {
   const clients = roomConnections.get(roomId);
   if (!clients) return;
   const usersMap = new Map<string, { id: string; name: string; email: string; role?: string }>();
   for (const client of clients) {
     const u = wsUserMap.get(client);
     if (u) {
-      const userObj = (await db.getUser(u.userId));
+      const userObj = db.users.get(u.userId);
       usersMap.set(u.userId, {
         id: u.userId,
         name: u.name,
@@ -2952,7 +2317,6 @@ function broadcastPushNotification(roomId: string, senderName: string, text: str
 // VITE SETUP & PRODUCTION STATIC SERVING
 // ==========================================
 async function startServer() {
-  await db.loadDatabase();
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -2962,7 +2326,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*all", async (req, res) => {
+    app.get("*all", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

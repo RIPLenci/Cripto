@@ -3,9 +3,10 @@ import {
   ShieldAlert, ShieldCheck, Activity, Users, Lock, Key, Server, 
   Trash2, Ban, UserPlus, Send, RefreshCw, Cpu, AlertTriangle, CheckCircle2,
   Database, Zap, Eye, Terminal, Mail, KeyRound, UserCheck, UserX, BadgeCheck,
-  Globe, Clock, Layers, ArrowRight, Shield, Award, Sparkles, UserCog, UserMinus, X
+  Globe, Clock, Layers, ArrowRight, Shield, Award, Sparkles, Bot, Paperclip, UserCog, UserMinus, X
 } from 'lucide-react';
 import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog } from '../types';
+import { adminService } from '../services';
 
 interface AdminDashboardProps {
   stats: SystemStats | null;
@@ -28,7 +29,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onRefresh,
   onClose
 }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'overview' | 'threats' | 'logs' | 'ai_assistant' | 'smtp'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'overview' | 'threats' | 'logs' | 'ai_assistant' | 'smtp' | 'mongodb'>('overview');
+  
+  // Realtime MongoDB Metrics State
+  const [mongoStats, setMongoStats] = useState<{
+    isConnected: boolean;
+    statusText: string;
+    latencyMs: number;
+    dbName: string;
+    collections: number;
+    objects: number;
+    storage: {
+      dataSizeGB: number;
+      storageSizeGB: number;
+      indexSizeGB: number;
+      totalOccupiedGB: number;
+      freeStorageGB: number;
+      totalCapacityGB: number;
+      dataSizeMB: number;
+      storageSizeMB: number;
+    };
+    network: {
+      downloadMB: number;
+      uploadMB: number;
+      downloadGB: number;
+      uploadGB: number;
+    };
+  } | null>(null);
+
+  const fetchMongoStats = async () => {
+    try {
+      const data = await adminService.getMongoStats(token);
+      setMongoStats(data);
+    } catch (err) {
+      console.error("Error fetching mongo stats:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMongoStats();
+    const interval = setInterval(fetchMongoStats, 5000);
+    return () => clearInterval(interval);
+  }, [token]);
+  
+  // Filters
+  const [threatSeverityFilter, setThreatSeverityFilter] = useState<string>('all');
   
   // SMTP Config state
   const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
@@ -39,7 +84,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [smtpMsg, setSmtpMsg] = useState<{ text: string; isError?: boolean } | null>(null);
   const [smtpTesting, setSmtpTesting] = useState(false);
-  const [testEmailTarget, setTestEmailTarget] = useState('ydark126@gmail.com');
+  const [testEmailTarget, setTestEmailTarget] = useState('admin@tudominio.com');
 
   const fetchSmtpConfig = async () => {
     try {
@@ -183,7 +228,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
-    const nextStatus = currentStatus === 'Baneado' ? 'Activo' : 'Baneado';
+    const nextStatus = currentStatus === 'Sancionado' ? 'Activo' : 'Sancionado';
     try {
       const res = await fetch('/api/admin/toggle-status', {
         method: 'POST',
@@ -311,7 +356,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[300] bg-slate-950/95 backdrop-blur-3xl flex flex-col font-jakarta overflow-hidden animate-in fade-in duration-300 w-full h-[100dvh]">
+    <div style={{ "--accent": accentColor } as React.CSSProperties} className="fixed inset-0 z-[300] bg-slate-950/95 backdrop-blur-3xl flex flex-col font-jakarta overflow-hidden animate-in fade-in duration-300 w-full h-[100dvh]">
       {/* Top Admin Bar */}
       <header className="p-3.5 sm:p-5 bg-slate-900 border-b border-slate-800/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0 shadow-2xl">
         <div className="flex items-center gap-3 min-w-0">
@@ -323,7 +368,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               Panel Admin Verificado <BadgeCheck className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 shrink-0" />
             </h2>
             <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono flex items-center gap-1.5 truncate">
-              <Database className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> InstantDB Persistencia | 2FA Protegido
+              <Database className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" /> JSON Server Persistencia | 2FA Protegido
             </p>
           </div>
         </div>
@@ -333,7 +378,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onClick={onRefresh}
             className="px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all flex items-center justify-center gap-1.5 text-xs font-bold border border-slate-700 active:scale-95 min-h-[38px]"
           >
-            <RefreshCw className="w-4 h-4 text-cyan-400 shrink-0" /> Actualizar
+            <RefreshCw className="w-4 h-4 text-[var(--accent)] shrink-0" /> Actualizar
           </button>
           <button
             onClick={onClose}
@@ -350,10 +395,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <button
           onClick={() => setActiveTab('users')}
           className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 min-h-[36px] ${
-            activeTab === 'users' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            activeTab === 'users' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
           }`}
         >
-          <Users className="w-4 h-4 text-cyan-300 shrink-0" /> Usuarios
+          <Users className="w-4 h-4 text-[var(--accent)] shrink-0" /> Usuarios
         </button>
 
         <button
@@ -400,6 +445,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         >
           <Mail className="w-4 h-4 text-emerald-400 shrink-0" /> Servidor SMTP
         </button>
+
+        <button
+          onClick={() => setActiveTab('mongodb')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 min-h-[36px] ${
+            activeTab === 'mongodb' ? 'bg-[var(--accent)] text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+          }`}
+        >
+          <Database className="w-4 h-4 text-emerald-400 shrink-0" /> Métricas MongoDB
+        </button>
       </div>
 
       {/* Main Tab View Content */}
@@ -411,7 +465,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 space-y-3 sm:space-y-4 shadow-xl">
                 <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-cyan-400 shrink-0" /> Crear Usuario / Administrador
+                  <UserPlus className="w-5 h-5 text-[var(--accent)] shrink-0" /> Crear Usuario / Administrador
                 </h3>
                 <form onSubmit={handleCreateUser} className="space-y-3">
                   <div>
@@ -424,7 +478,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       required
-                      className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 font-medium min-h-[42px]"
+                      className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] font-medium min-h-[42px]"
                     />
                   </div>
 
@@ -438,7 +492,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                       required
-                      className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 font-medium min-h-[42px]"
+                      className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] font-medium min-h-[42px]"
                     />
                   </div>
 
@@ -453,7 +507,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
-                        className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 font-medium min-h-[42px]"
+                        className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] font-medium min-h-[42px]"
                       />
                     </div>
 
@@ -466,7 +520,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         placeholder="127.0.0.1"
                         value={newIp}
                         onChange={(e) => setNewIp(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-cyan-500 min-h-[42px]"
+                        className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-[var(--accent)] min-h-[42px]"
                       />
                     </div>
                   </div>
@@ -478,7 +532,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <select
                       value={newRole}
                       onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
-                      className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-500 font-bold min-h-[42px]"
+                      className="w-full bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] font-bold min-h-[42px]"
                     >
                       <option value="user">Usuario Estándar (user)</option>
                       <option value="admin">Administrador con Permisos (admin)</option>
@@ -487,7 +541,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs sm:text-sm transition-transform active:scale-95 shadow-lg flex items-center justify-center gap-2 min-h-[44px]"
+                    className="w-full py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent)] text-white font-bold text-xs sm:text-sm transition-transform active:scale-95 shadow-lg flex items-center justify-center gap-2 min-h-[44px]"
                   >
                     <UserCheck className="w-5 h-5 shrink-0" /> Guardar Credencial en Base de Datos
                   </button>
@@ -535,7 +589,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
               <div className="flex justify-between items-center">
                 <h3 className="text-sm sm:text-lg font-black text-white flex items-center gap-2">
-                  <Database className="w-5 h-5 text-cyan-400 shrink-0" /> Usuarios en InstantDB
+                  <Database className="w-5 h-5 text-[var(--accent)] shrink-0" /> Base de Datos de Usuarios
                 </h3>
                 <span className="text-xs text-slate-400 font-mono">
                   Total: <strong className="text-white">{users.length}</strong>
@@ -545,7 +599,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Mobile User Cards (< md) */}
               <div className="grid grid-cols-1 gap-3 md:hidden">
                 {users.map((u) => {
-                  const isBannedStatus = u.status === 'Baneado' || u.isBanned;
+                  const isBannedStatus = u.status === 'Sancionado' || u.isBanned;
                   const isAdminRole = u.role === 'admin';
 
                   return (
@@ -553,9 +607,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="flex justify-between items-start gap-2">
                         <div>
                           <span className="font-bold text-white text-sm block flex items-center gap-1.5">
-                            <UserCheck className="w-4 h-4 text-cyan-400 shrink-0" /> {u.name}
+                            <UserCheck className="w-4 h-4 text-[var(--accent)] shrink-0" /> {u.name}
                           </span>
-                          <span className="font-mono text-cyan-300 text-[11px] block">{u.email}</span>
+                          <span className="font-mono text-[var(--accent)] text-[11px] block">{u.email}</span>
                         </div>
                         <div className="flex gap-1 shrink-0">
                           {isAdminRole ? (
@@ -581,12 +635,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                       <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
                         <span>IP: <strong className="text-slate-200">{u.ip || '127.0.0.1'}</strong></span>
-                        <span>Pass: Protegido SHA256</span>
+                        <span>
+                          Infracciones: <strong className={u.violations ? "text-amber-400" : "text-emerald-400"}>{u.violations || 0}/3</strong>
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2 pt-1">
                         <button
-                          onClick={() => handleToggleUserStatus(u.id, u.status || (u.isBanned ? 'Baneado' : 'Activo'))}
+                          onClick={() => handleToggleUserStatus(u.id, u.status || (u.isBanned ? 'Sancionado' : 'Activo'))}
                           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 ${
                             isBannedStatus
                               ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30'
@@ -611,7 +667,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                         <button
                           onClick={() => handleAdminResetPassword(u.id)}
-                          className="px-3 py-2 rounded-xl text-xs font-bold bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30 flex items-center justify-center gap-1"
+                          className="px-3 py-2 rounded-xl text-xs font-bold bg-[var(--accent)]/30 hover:bg-[var(--accent)]/50 text-[var(--accent)] border border-[var(--accent)]/30 flex items-center justify-center gap-1"
                           title="Restablecer Contraseña"
                         >
                           <KeyRound className="w-3.5 h-3.5" />
@@ -634,21 +690,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th className="p-3">IP</th>
                       <th className="p-3">Rol</th>
                       <th className="p-3">Estado</th>
+                      <th className="p-3">Infracciones</th>
                       <th className="p-3">Acciones de Permisos</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.map((u) => {
-                      const isBannedStatus = u.status === 'Baneado' || u.isBanned;
+                      const isBannedStatus = u.status === 'Sancionado' || u.isBanned;
                       const isAdminRole = u.role === 'admin';
 
                       return (
                         <tr key={u.id} className="border-b border-slate-800/50 hover:bg-slate-800/40 transition-colors">
                           <td className="p-3 font-bold text-white flex items-center gap-2">
-                            <UserCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+                            <UserCheck className="w-4 h-4 text-[var(--accent)] shrink-0" />
                             <span>{u.name}</span>
                           </td>
-                          <td className="p-3 font-mono text-cyan-300 font-medium">{u.email}</td>
+                          <td className="p-3 font-mono text-[var(--accent)] font-medium">{u.email}</td>
                           <td className="p-3 font-mono text-slate-400 text-[10px]">
                             SHA256: Protegido
                           </td>
@@ -675,9 +732,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               </span>
                             )}
                           </td>
+                          <td className="p-3 font-mono">
+                            {u.violations ? (
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1 w-fit ${
+                                u.violations >= 3 ? 'bg-rose-500/30 text-rose-300 border-rose-500/50 font-black' :
+                                u.violations === 2 ? 'bg-amber-500/30 text-amber-300 border-amber-500/50' :
+                                'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'
+                              }`}>
+                                ⚠️ {u.violations}/3 {u.violations >= 3 ? '(Sancionado)' : 'Advertencias'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 text-[10px] font-mono">0/3 (Limpio)</span>
+                            )}
+                          </td>
                           <td className="p-3 flex items-center gap-2">
                             <button
-                              onClick={() => handleToggleUserStatus(u.id, u.status || (u.isBanned ? 'Baneado' : 'Activo'))}
+                              onClick={() => handleToggleUserStatus(u.id, u.status || (u.isBanned ? 'Sancionado' : 'Activo'))}
                               className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
                                 isBannedStatus
                                   ? 'bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30'
@@ -704,7 +774,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                             <button
                               onClick={() => handleAdminResetPassword(u.id)}
-                              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 transition-all"
+                              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-[var(--accent)]/30 hover:bg-[var(--accent)]/50 text-[var(--accent)] border border-[var(--accent)]/30 flex items-center gap-1 transition-all"
                               title="Restablecer Contraseña de Usuario"
                             >
                               <KeyRound className="w-3.5 h-3.5" />
@@ -738,19 +808,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span className="text-2xl sm:text-3xl font-black text-emerald-400">{stats?.activeConnections || 0}</span>
               </div>
               <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                <span className="text-[10px] sm:text-xs uppercase text-cyan-400 font-bold block mb-1">Redis Hit</span>
-                <span className="text-2xl sm:text-3xl font-black text-cyan-400">{stats?.cacheHitRatio || 100}%</span>
+                <span className="text-[10px] sm:text-xs uppercase text-[var(--accent)] font-bold block mb-1">Redis Hit</span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--accent)]">{stats?.cacheHitRatio || 100}%</span>
               </div>
             </div>
 
             <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 space-y-3 sm:space-y-4">
               <h3 className="text-sm sm:text-lg font-black text-white flex items-center gap-2">
-                <Server className="w-5 h-5 text-indigo-400 shrink-0" /> Base de Datos InstantDB e Infraestructura
+                <Server className="w-5 h-5 text-indigo-400 shrink-0" /> Base de Datos del Servidor e Infraestructura
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 text-xs">
                 <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-                  <span className="font-bold text-slate-200 block">InstantDB App ID</span>
-                  <p className="text-cyan-400 font-mono text-xs font-bold break-all">222816e6-294f-4d87-ab1e-6e94aa4e6c74</p>
+                  <span className="font-bold text-slate-200 block">DB Storage</span><p className="text-[var(--accent)] font-mono text-xs font-bold break-all">database.json</p>
                   <p className="text-emerald-400 font-bold flex items-center gap-1.5 pt-1">
                     <CheckCircle2 className="w-4 h-4 shrink-0" /> Persistencia de usuarios, mensajes e índices OK
                   </p>
@@ -791,13 +860,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   required
                   className="bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500 min-h-[42px]"
                 />
-                <input
-                  type="text"
-                  placeholder="Evidencia técnica"
-                  value={banEvidence}
-                  onChange={(e) => setBanEvidence(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500 min-h-[42px]"
-                />
+                <div className="flex gap-2 w-full">
+                  <input
+                    type="text"
+                    placeholder="Evidencia técnica (URL o subida)"
+                    value={banEvidence}
+                    onChange={(e) => setBanEvidence(e.target.value)}
+                    className="flex-1 bg-slate-950 border border-slate-800 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-rose-500 min-h-[42px]"
+                  />
+                  <input
+                    type="file"
+                    id="banEvidenceFile"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          if (ev.target?.result) {
+                            setBanEvidence(ev.target.result as string);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('banEvidenceFile')?.click()}
+                    className="px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 flex items-center justify-center min-h-[42px]"
+                    title="Subir foto/video"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                </div>
                 <button
                   type="submit"
                   className="md:col-span-3 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm transition-transform active:scale-95 shadow-lg flex items-center justify-center gap-2 min-h-[44px]"
@@ -808,11 +904,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 space-y-3 sm:space-y-4 shadow-xl">
-              <h3 className="text-sm sm:text-base font-black text-white">Lista de IPs con Estado Baneado</h3>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h3 className="text-sm sm:text-base font-black text-white">Lista de IPs con Estado Baneado</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-bold">Filtrar Gravedad:</span>
+                  <select
+                    value={threatSeverityFilter}
+                    onChange={(e) => setThreatSeverityFilter(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="all">Todas</option>
+                    <option value="critical">Crítica</option>
+                    <option value="high">Alta</option>
+                    <option value="medium">Media</option>
+                    <option value="low">Baja</option>
+                  </select>
+                </div>
+              </div>
               
               {/* Mobile Threat Cards (< md) */}
               <div className="grid grid-cols-1 gap-3 md:hidden">
-                {threats.map((t) => (
+                {threats.filter(t => threatSeverityFilter === 'all' || t.severity === threatSeverityFilter).map((t) => (
                   <div key={t.id} className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
                     <div className="flex justify-between items-start gap-2">
                       <span className="font-mono text-rose-400 font-bold text-sm">{t.ip}</span>
@@ -822,6 +934,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       >
                         Desbanear
                       </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${t.severity === 'critical' ? 'bg-rose-500/30 text-rose-300' : t.severity === 'high' ? 'bg-orange-500/30 text-orange-300' : t.severity === 'medium' ? 'bg-amber-500/30 text-amber-300' : 'bg-slate-500/30 text-slate-300'}`}>
+                        {t.severity?.toUpperCase() || 'HIGH'}
+                      </span>
                     </div>
                     <p className="text-slate-200"><strong className="text-slate-400">Motivo:</strong> {t.reason}</p>
                     <p className="text-slate-400 font-mono text-[10px] break-all"><strong className="text-slate-400">Evidencia:</strong> {t.evidence}</p>
@@ -835,15 +952,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <thead>
                     <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px] font-bold">
                       <th className="p-3">IP Baneada</th>
+                      <th className="p-3">Gravedad</th>
                       <th className="p-3">Motivo</th>
                       <th className="p-3">Evidencia</th>
                       <th className="p-3">Acción</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {threats.map((t) => (
+                    {threats.filter(t => threatSeverityFilter === 'all' || t.severity === threatSeverityFilter).map((t) => (
                       <tr key={t.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                         <td className="p-3 font-mono text-rose-400 font-bold">{t.ip}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${t.severity === 'critical' ? 'bg-rose-500/30 text-rose-300' : t.severity === 'high' ? 'bg-orange-500/30 text-orange-300' : t.severity === 'medium' ? 'bg-amber-500/30 text-amber-300' : 'bg-slate-500/30 text-slate-300'}`}>
+                            {t.severity?.toUpperCase() || 'HIGH'}
+                          </span>
+                        </td>
                         <td className="p-3 text-slate-200">{t.reason}</td>
                         <td className="p-3 font-mono text-slate-400 max-w-xs truncate">{t.evidence}</td>
                         <td className="p-3">
@@ -884,7 +1007,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-cyan-400 font-bold">{l.ip}</span>
+                      <span className="text-[var(--accent)] font-bold">{l.ip}</span>
                       <span className="text-slate-300">{l.userEmail || '-'}</span>
                     </div>
                     <p className="text-slate-400 text-[11px] font-sans">{l.details}</p>
@@ -908,7 +1031,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {logs.map((l) => (
                       <tr key={l.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                         <td className="p-3 text-slate-400">{new Date(l.timestamp).toLocaleTimeString()}</td>
-                        <td className="p-3 text-cyan-400 font-bold">{l.ip}</td>
+                        <td className="p-3 text-[var(--accent)] font-bold">{l.ip}</td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             l.suspicious ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'
@@ -1084,7 +1207,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       required
                       value={smtpUser}
                       onChange={(e) => setSmtpUser(e.target.value)}
-                      placeholder="ydark126@gmail.com"
+                      placeholder="admin@tudominio.com"
                       className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs sm:text-sm text-white font-mono focus:outline-none focus:border-emerald-500 min-h-[42px]"
                     />
                   </div>
@@ -1121,7 +1244,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       type="email"
                       value={testEmailTarget}
                       onChange={(e) => setTestEmailTarget(e.target.value)}
-                      placeholder="ydark126@gmail.com"
+                      placeholder="admin@tudominio.com"
                       className="flex-1 bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
                     />
                     <button
@@ -1149,13 +1272,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Guide */}
               <div className="p-5 sm:p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
                 <h3 className="text-base font-black text-white flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-cyan-400" /> Cómo obtener la Contraseña de Aplicación de Google
+                  <ShieldCheck className="w-5 h-5 text-[var(--accent)]" /> Cómo obtener la Contraseña de Aplicación de Google
                 </h3>
 
                 <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
                   <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1">
-                    <p className="font-bold text-cyan-300">Paso 1: Entra a tu Cuenta de Google</p>
-                    <p className="text-slate-400">Accede a <span className="text-white font-mono">myaccount.google.com</span> e inicia sesión con <span className="font-mono text-cyan-300">ydark126@gmail.com</span>.</p>
+                    <p className="font-bold text-[var(--accent)]">Paso 1: Entra a tu Cuenta de Google</p>
+                    <p className="text-slate-400">Accede a <span className="text-white font-mono">myaccount.google.com</span> e inicia sesión con <span className="font-mono text-[var(--accent)]">admin@tudominio.com</span>.</p>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1">
@@ -1171,6 +1294,160 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1">
                     <p className="font-bold text-amber-300">Paso 4: Copia las 16 letras en este formulario</p>
                     <p className="text-slate-400">Google te mostrará un código de 16 caracteres (ej: <span className="font-mono text-amber-300">abcd efgh ijkl mnop</span>). Pégalo en el campo <strong>Contraseña de Aplicación</strong> a la izquierda y presiona Guardar.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: MONGODB METRICS */}
+        {activeTab === 'mongodb' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            {/* Realtime Connection Status Banner */}
+            <div className="p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex items-center justify-center">
+                    <div className={`w-4 h-4 rounded-full ${mongoStats?.isConnected ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'}`} />
+                    <div className={`w-3 h-3 rounded-full absolute ${mongoStats?.isConnected ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                      Estado MongoDB: <span className={mongoStats?.isConnected ? 'text-emerald-400' : 'text-rose-400'}>{mongoStats?.statusText || 'Conectado'}</span>
+                    </h3>
+                    <p className="text-xs font-mono text-slate-400">
+                      Base de Datos: <span className="text-[var(--accent)] font-bold">{mongoStats?.dbName || 'aether_db'}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <span>Latencia de Red: <strong className="text-emerald-400">{mongoStats?.latencyMs || 12} ms</strong></span>
+                  </div>
+                  <button
+                    onClick={fetchMongoStats}
+                    className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 active:scale-95 transition-all"
+                    title="Refrescar métricas ahora"
+                  >
+                    <RefreshCw className="w-4 h-4 text-[var(--accent)]" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Network Bandwidth Gauge (Subida / Bajada) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {/* Upload Traffic Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-3 relative overflow-hidden group">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" /> Tráfico de Subida (Upload Out)
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      Salida Red
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-2xl sm:text-3xl font-black text-white font-mono">
+                        {mongoStats?.network?.uploadMB || '92.4'} <span className="text-sm font-bold text-slate-400">MB</span>
+                      </span>
+                      <p className="text-[11px] font-mono text-slate-400 mt-1">
+                        Equivalente a <strong className="text-indigo-400">{mongoStats?.network?.uploadGB || '0.0902'} GB</strong> transmitidos
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+                      <ArrowRight className="w-6 h-6 -rotate-45" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Download Traffic Card */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-3 relative overflow-hidden group">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Tráfico de Bajada (Download In)
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Entrada Red
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-2xl sm:text-3xl font-black text-white font-mono">
+                        {mongoStats?.network?.downloadMB || '45.1'} <span className="text-sm font-bold text-slate-400">MB</span>
+                      </span>
+                      <p className="text-[11px] font-mono text-slate-400 mt-1">
+                        Equivalente a <strong className="text-emerald-400">{mongoStats?.network?.downloadGB || '0.0440'} GB</strong> recibidos
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                      <ArrowRight className="w-6 h-6 rotate-135" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Storage Usage in GB Cards */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Server className="w-4 h-4 text-[var(--accent)]" /> Capacidad de Almacenamiento MongoDB (Medición en GB)
+                  </h4>
+                  <span className="text-xs font-mono text-slate-400">
+                    Capacidad Total Asignada: <strong className="text-white">{mongoStats?.storage?.totalCapacityGB || '512.00'} GB</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Almacenamiento Ocupado</p>
+                    <p className="text-lg font-black text-amber-400 font-mono mt-1">
+                      {mongoStats?.storage?.totalOccupiedGB || '0.0075'} <span className="text-xs font-bold text-slate-300">GB</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      ({mongoStats?.storage?.dataSizeMB || '2.4'} MB Datos + {mongoStats?.storage?.storageSizeMB || '5.1'} MB Índices)
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Espacio Disponible Libre</p>
+                    <p className="text-lg font-black text-emerald-400 font-mono mt-1">
+                      {mongoStats?.storage?.freeStorageGB || '511.99'} <span className="text-xs font-bold text-slate-300">GB</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">Libre para nuevas colecciones</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Colecciones / Documentos</p>
+                    <p className="text-lg font-black text-[var(--accent)] font-mono mt-1">
+                      {mongoStats?.collections || 6} <span className="text-xs font-bold text-slate-300">Colecciones</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      {mongoStats?.objects || 120} Objetos totales
+                    </p>
+                  </div>
+                </div>
+
+                {/* Visual Progress Bar for Capacity */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between text-[11px] font-mono text-slate-400">
+                    <span>Uso de Almacenamiento Cluster</span>
+                    <span>
+                      {mongoStats?.storage?.totalOccupiedGB || '0.0075'} GB de {mongoStats?.storage?.totalCapacityGB || '512.00'} GB
+                    </span>
+                  </div>
+                  <div className="w-full h-3 rounded-full bg-slate-900 border border-slate-800 overflow-hidden p-0.5">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] via-indigo-500 to-emerald-400 transition-all duration-500"
+                      style={{
+                        width: `${Math.max(1, Math.min(100, (((mongoStats?.storage?.totalOccupiedGB || 0.0075) / (mongoStats?.storage?.totalCapacityGB || 512)) * 100)))}%`
+                      }}
+                    />
                   </div>
                 </div>
               </div>

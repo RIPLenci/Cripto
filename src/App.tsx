@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Shield, Zap, Lock, Users, Power, Send, Paperclip, 
@@ -10,7 +12,7 @@ import {
   Palette, Paintbrush, Sparkles, LogIn, UserPlus, ShieldAlert, Cpu,
   Mail, KeyRound, BadgeCheck, Globe, CheckSquare, Layers, Wifi, UserCheck, ArrowRight, Clock,
   Key, Sliders, Volume2, VolumeX, Eye, UserCog, Award, RefreshCw,
-  Mic, MicOff, Square, Bot
+  Mic, MicOff, Square, Bot, Crown
 } from 'lucide-react';
 import { CryptoEngine } from './lib/crypto';
 import { authService, roomService, adminService, aiService } from './services';
@@ -31,13 +33,13 @@ export default function App() {
   });
 
   // App UI State
-  const [view, setView] = useState<'auth' | 'rooms' | 'chat'>('auth');
+  const [view, setView] = useState<'auth' | 'rooms' | 'chat' | 'premium'>('auth');
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [isAdmin2FAModalOpen, setIsAdmin2FAModalOpen] = useState(false);
   const [isPrivacyScreenActive, setIsPrivacyScreenActive] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{ id: number; msg: string; type: string }>>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: string; msg: string; type: string }>>([]);
 
   // Auth & Email OTP Verification State
   const [token, setToken] = useState<string | null>(null);
@@ -81,6 +83,11 @@ export default function App() {
   // Rooms & WebSockets
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
+  const currentRoomRef = useRef<ChatRoom | null>(null);
+  const updateCurrentRoom = (room: ChatRoom | null) => {
+    setCurrentRoom(room);
+    currentRoomRef.current = room;
+  };
   const [newRoomName, setNewRoomName] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [roomRoomKey, setRoomRoomKey] = useState<CryptoKey | null>(null);
@@ -236,8 +243,32 @@ export default function App() {
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
+    // Heartbeat logic
+    let pingInterval: NodeJS.Timeout;
+
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'AUTHENTICATE', token: authToken }));
+      
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'PING' }));
+        }
+      }, 30000);
+    };
+
+    ws.onclose = () => {
+      clearInterval(pingInterval);
+      // Try to reconnect if token is still valid
+      if (token) {
+        setTimeout(() => {
+          if (token) initWebSocket(token);
+        }, 5000);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket Error:', error);
+      ws.close();
     };
 
     ws.onmessage = async (event) => {
@@ -263,6 +294,9 @@ export default function App() {
             })
           );
           setMessages(decryptedMsgs);
+          if (data.roomId) {
+            localStorage.setItem(`room_cache_${data.roomId}`, JSON.stringify(decryptedMsgs.slice(-50)));
+          }
         }
 
         if (data.type === 'NEW_MESSAGE') {
@@ -275,8 +309,23 @@ export default function App() {
           const msgObj = { ...data.message, text };
           setMessages((prev) => {
              if (prev.some(m => m.id === msgObj.id)) return prev;
-             return [...prev, msgObj];
+             const newMsgs = [...prev, msgObj];
+             if (currentRoomRef.current?.id) {
+               localStorage.setItem(`room_cache_${currentRoomRef.current.id}`, JSON.stringify(newMsgs.slice(-50)));
+             }
+             return newMsgs;
           });
+        }
+
+        if (data.type === 'UPDATE_MESSAGE') {
+          let text = data.encryptedText;
+          // Si el mensaje modificado necesitaba desencriptación (aunque normalmente será el bot)
+          if (data.senderId && data.senderId !== 'bot-ai-assistant' && data.senderId !== 'system' && roomKeyRef.current) {
+             text = await CryptoEngine.decryptMessage(roomKeyRef.current, data.encryptedText).catch(() => text);
+          }
+          setMessages((prev) => 
+            prev.map(m => m.id === data.messageId ? { ...m, encryptedText: data.encryptedText, text: text } : m)
+          );
         }
 
         if (data.type === 'MESSAGE_DELETED') {
@@ -314,6 +363,15 @@ export default function App() {
 
         if (data.type === 'THREAT_BLOCKED') {
           notify(`Aether Security: Acción restringida (${data.reason})`, 'alert');
+        }
+
+        if (data.type === 'ROOM_DELETED') {
+          notify(data.message || 'La sala ha sido eliminada por su creador o un administrador.', 'alert');
+          setRooms((prev) => Array.isArray(prev) ? prev.filter(r => r.id !== data.roomId) : []);
+          if (currentRoomRef.current?.id === data.roomId) {
+            updateCurrentRoom(null);
+            setView('rooms');
+          }
         }
       } catch (e) {
         console.error(e);
@@ -498,11 +556,45 @@ export default function App() {
     if (!token) return;
     const roomKey = await CryptoEngine.generateRoomKey(room.code);
     setRoomKey(roomKey);
-    setCurrentRoom(room);
+    updateCurrentRoom(room);
+    
+    // Cache loading for instant display
+    const cached = localStorage.getItem(`room_cache_${room.id}`);
+    if (cached) {
+      try { setMessages(JSON.parse(cached)); } catch (e) { setMessages([]); }
+    } else {
+      setMessages([]);
+    }
+    
     setView('chat');
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'JOIN_ROOM', roomId: room.id }));
+    }
+  };
+
+  const handleDeleteRoom = async (e: React.MouseEvent, roomId: string) => {
+    e.preventDefault();
+    e.stopPropagation(); // Evitar que se una a la sala al hacer clic
+    if (!confirm('¿Estás seguro de que deseas eliminar esta sala permanentemente? Se eliminarán todos sus mensajes.')) return;
+    try {
+      const res = await fetch(`/api/rooms/${roomId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setRooms(prev => Array.isArray(prev) ? prev.filter(r => r.id !== roomId) : []);
+        if (currentRoomRef.current?.id === roomId) {
+          updateCurrentRoom(null);
+          setView('rooms');
+        }
+        notify('Sala eliminada correctamente', 'success');
+      } else {
+        const error = await res.json();
+        notify(error.error || 'Error al eliminar la sala', 'alert');
+      }
+    } catch (err: any) {
+      notify('Error al eliminar la sala: ' + (err.message || ''), 'alert');
     }
   };
 
@@ -917,6 +1009,14 @@ export default function App() {
             )}
 
             <button
+              onClick={() => setView('premium')}
+              className="p-2 sm:p-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors border border-amber-500/30 min-h-[40px] min-w-[40px] flex items-center justify-center"
+              title="Aether Premium"
+            >
+              <Crown className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+
+            <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2 sm:p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/50 min-h-[40px] min-w-[40px] flex items-center justify-center"
               title="Personalización"
@@ -938,6 +1038,116 @@ export default function App() {
 
         {/* Main Body */}
         <main className="flex-1 relative overflow-hidden flex flex-col min-h-0">
+          {/* VIEW: PREMIUM */}
+          {view === 'premium' && (
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 scrollbar-none relative overflow-hidden">
+              {/* Premium Background Animations - Aurora Dorada */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-amber-400 rounded-[100%] mix-blend-multiply filter blur-[100px] opacity-20 animate-aurora"></div>
+                <div className="absolute top-[10%] right-[-20%] w-[70%] h-[70%] bg-yellow-300 rounded-[100%] mix-blend-multiply filter blur-[120px] opacity-20 animate-aurora animation-delay-aurora-1"></div>
+                <div className="absolute bottom-[-20%] left-[10%] w-[80%] h-[60%] bg-orange-500 rounded-[100%] mix-blend-multiply filter blur-[100px] opacity-15 animate-aurora animation-delay-aurora-2"></div>
+              </div>
+              
+              <button
+                onClick={() => setView(token ? 'rooms' : 'auth')}
+                className="absolute top-4 left-4 sm:top-8 sm:left-8 p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors z-20 flex items-center gap-2 font-medium shadow-lg backdrop-blur-sm"
+              >
+                <ArrowRight className="w-5 h-5 rotate-180" />
+                <span className="hidden sm:inline">Volver</span>
+              </button>
+
+              <div className="max-w-4xl mx-auto space-y-8 pb-12 mt-12 sm:mt-0 relative z-10">
+                <div className="text-center space-y-4 pt-4">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-amber-500/20 mb-4 transform -rotate-3">
+                    <Crown className="w-8 h-8 sm:w-10 sm:h-10 text-slate-950" />
+                  </div>
+                  <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
+                    Aether <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">Premium</span>
+                  </h2>
+                  <p className="text-sm sm:text-base text-slate-400 max-w-xl mx-auto font-medium">
+                    Eleva tu seguridad y privacidad al máximo nivel. Desbloquea herramientas avanzadas de IA, salas persistentes y acceso ilimitado.
+                  </p>
+                </div>
+
+                {currentUser?.isPremium && (
+                  <div className="p-6 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-center space-y-2 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
+                    <Crown className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                    <h3 className="text-xl font-bold text-white">Eres usuario Premium Activo</h3>
+                    <p className="text-slate-300 text-sm">
+                      Tu suscripción finaliza el <span className="font-mono text-amber-400 font-bold">{currentUser.premiumExpiresAt ? new Date(currentUser.premiumExpiresAt).toLocaleString() : 'N/A'}</span>
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mt-8">
+                  {/* Plan Gratuito */}
+                  <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col h-full relative group hover:border-slate-700 transition-colors">
+                    <div className="mb-6">
+                      <h3 className="text-xl font-bold text-white mb-2">Plan Básico</h3>
+                      <div className="text-3xl font-black text-slate-300">$0.00 <span className="text-sm font-bold text-slate-500">/ mes</span></div>
+                      <p className="text-xs text-slate-400 mt-3 font-medium">Para mensajería segura esencial.</p>
+                    </div>
+                    
+                    <ul className="space-y-4 flex-1">
+                      {[
+                        'Cifrado End-to-End E2EE',
+                        'Salas de chat públicas y privadas',
+                        'Protección WAF básica',
+                        'Límites de IA: Aether Security AI Base',
+                        'Envío de archivos hasta 20 MB',
+                        'Soporte comunitario'
+                      ].map((feat, i) => (
+                        <li key={i} className="flex items-start gap-3 text-sm text-slate-300">
+                          <CheckCircle2 className="w-5 h-5 text-indigo-400 shrink-0" />
+                          <span className="leading-tight">{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Plan Premium */}
+                  <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border-2 border-amber-500/50 shadow-2xl shadow-amber-500/10 flex flex-col h-full relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-black px-4 py-1 rounded-bl-xl uppercase tracking-widest shadow-md">
+                      Recomendado
+                    </div>
+                    
+                    <div className="mb-6 relative z-10">
+                      <h3 className="text-xl font-bold text-amber-400 mb-2 flex items-center gap-2">Plan Premium <Crown className="w-4 h-4" /></h3>
+                      <div className="text-3xl font-black text-white">$9.99 <span className="text-sm font-bold text-slate-500">/ mes</span></div>
+                      <p className="text-xs text-slate-400 mt-3 font-medium">Para usuarios que exigen el máximo poder.</p>
+                    </div>
+                    
+                    <ul className="space-y-4 flex-1 relative z-10">
+                      {[
+                        'Acceso prioritario a Aether Security AI Max (Modelos Avanzados de NVIDIA y Gemini)',
+                        'Análisis de archivos complejos sin límite (hasta 200 MB)',
+                        'Generación ilimitada de código y markdown enriquecido',
+                        'Audios y Voice Notes ultra rápidos sin cuotas',
+                        'Soporte Prioritario 24/7 (Contactar Administrador)',
+                        'Inmunidad Anti-Baneo Leve (Advertencias sin bloqueo inmediato)',
+                        'Reconocimiento de Perfil: Insignia Premium en tu usuario'
+                      ].map((feat, i) => (
+                        <li key={i} className="flex items-start gap-3 text-sm font-medium text-slate-200">
+                          <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+                          <span className="leading-tight">{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {!currentUser?.isPremium && (
+                      <button className="mt-8 w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black uppercase tracking-wider text-sm transition-all shadow-lg active:scale-95"
+                        onClick={() => alert("Para adquirir Premium, contacta al Administrador de tu servidor y solicita la asignación a tu cuenta (" + (currentUser?.email || "tu correo") + ").")}
+                      >
+                        Contactar Administrador
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* VIEW 1: AUTH & GMAIL OTP VERIFICATION */}
           {view === 'auth' && (
             <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0 scrollbar-none">
@@ -1284,7 +1494,7 @@ export default function App() {
                     <Layers className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)] shrink-0" /> Salas de Comunicación Protegidas
                   </h2>
                   <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                    <span>Usuario: <strong className="text-white">{currentUser?.name}</strong></span>
+                    <span className="flex items-center gap-1">Usuario: <strong className="text-white">{currentUser?.name}</strong> {currentUser?.isPremium && <span title="Usuario Premium"><Crown className="w-3 h-3 text-amber-400" /></span>}</span>
                     <span>| Rol: <strong className="text-[var(--accent)] font-bold">{currentUser?.role?.toUpperCase()}</strong></span>
                     <span className="text-emerald-400 font-bold">● {currentUser?.status || 'Activo'}</span>
                   </p>
@@ -1377,12 +1587,23 @@ export default function App() {
                           ● {r.activeUsersCount} conexiones activas
                         </span>
                       </div>
-                      <button
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold text-white shrink-0 opacity-90 group-hover:opacity-100 flex items-center gap-1 shadow-md min-h-[38px]"
-                        style={{ backgroundColor: preferences.accent }}
-                      >
-                        <LogIn className="w-3.5 h-3.5" /> Entrar
-                      </button>
+                      <div className="flex gap-2 shrink-0">
+                        {currentUser && (r.createdById === currentUser.id || currentUser.role === 'admin') && (
+                          <button
+                            onClick={(e) => handleDeleteRoom(e, r.id)}
+                            className="px-2.5 py-2 rounded-xl text-xs font-bold text-white shrink-0 opacity-80 hover:opacity-100 flex items-center gap-1 shadow-md bg-rose-600/80 hover:bg-rose-600 transition-colors"
+                            title="Eliminar Sala"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          className="px-3.5 py-2 rounded-xl text-xs font-bold text-white shrink-0 opacity-90 group-hover:opacity-100 flex items-center gap-1 shadow-md min-h-[38px]"
+                          style={{ backgroundColor: preferences.accent }}
+                        >
+                          <LogIn className="w-3.5 h-3.5" /> Entrar
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1408,21 +1629,30 @@ export default function App() {
                     </h3>
                     <span className="text-[10px] font-mono text-[var(--accent)] block truncate">Código: {currentRoom.code}</span>
                     {currentRoom && currentUser && (currentRoom.createdById === currentUser.id || currentUser.role === 'admin') && (
-                      <button
-                        onClick={async () => {
-                          const res = await fetch('/api/rooms/toggle-closed', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ roomId: currentRoom.id, isClosed: !currentRoom.isClosed })
-                          });
-                          if (res.ok) {
-                            setCurrentRoom({ ...currentRoom, isClosed: !currentRoom.isClosed });
-                          }
-                        }}
-                        className={`ml-2 px-2 py-0.5 rounded text-[10px] font-bold border ${currentRoom.isClosed ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}
-                      >
-                        {currentRoom.isClosed ? 'Sala Cerrada' : 'Sala Abierta'}
-                      </button>
+                      <div className="inline-flex items-center gap-1.5 ml-2">
+                        <button
+                          onClick={async () => {
+                            const res = await fetch('/api/rooms/toggle-closed', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ roomId: currentRoom.id, isClosed: !currentRoom.isClosed })
+                            });
+                            if (res.ok) {
+                              updateCurrentRoom({ ...currentRoom, isClosed: !currentRoom.isClosed });
+                            }
+                          }}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${currentRoom.isClosed ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}
+                        >
+                          {currentRoom.isClosed ? 'Sala Cerrada' : 'Sala Abierta'}
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteRoom(e, currentRoom.id)}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600/80 hover:bg-rose-600 text-white border border-rose-500/50 transition-colors flex items-center gap-1"
+                          title="Eliminar esta sala"
+                        >
+                          <Trash2 className="w-3 h-3" /> Eliminar
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1504,7 +1734,7 @@ export default function App() {
                           <div className="flex items-center gap-2 overflow-hidden">
                             <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
                             <p className="truncate text-[11px] font-medium text-amber-200/90">
-                              {(m as any).text || m.encryptedText}
+                              {(m as any).text !== undefined ? (m as any).text : m.encryptedText}
                             </p>
                           </div>
                           <button
@@ -1552,7 +1782,13 @@ export default function App() {
                           </div>
                         )}
 
-                        <p className="whitespace-pre-wrap font-medium break-words leading-relaxed">{(m as any).text || m.encryptedText}</p>
+                        {isBot ? (
+                          <div className="prose prose-invert prose-sm max-w-none break-words leading-relaxed">
+                            <Markdown remarkPlugins={[remarkGfm]}>{(m as any).text !== undefined ? String((m as any).text) : String(m.encryptedText)}</Markdown>
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap font-medium break-words leading-relaxed">{(m as any).text !== undefined ? (m as any).text : m.encryptedText}</p>
+                        )}
 
                         {m.attachments && m.attachments.length > 0 && (
                           <div className="mt-2 space-y-2">

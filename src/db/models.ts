@@ -18,6 +18,8 @@ export interface IUser extends Document {
   isVerified: boolean;
   createdAt: number;
   isBanned: boolean;
+  isPremium?: boolean;
+  premiumExpiresAt?: number;
   banReason?: string;
   banSeverity?: 'low' | 'medium' | 'high' | 'critical';
   banEvidence?: string;
@@ -35,12 +37,16 @@ const UserSchema = new Schema<IUser>({
   isVerified: { type: Boolean, required: true, default: false },
   createdAt: { type: Number, required: true, default: Date.now },
   isBanned: { type: Boolean, required: true, default: false },
+  isPremium: { type: Boolean, default: false },
+  premiumExpiresAt: { type: Number },
   banReason: { type: String },
   banSeverity: { type: String },
   banEvidence: { type: String },
   violations: { type: Number, default: 0 },
   infractions: { type: [Object], default: [] }
 });
+UserSchema.index({ email: 1 });
+UserSchema.index({ id: 1 });
 UserSchema.plugin(fieldEncryption, { fields: ['passwordHash', 'ip', 'name'], secret });
 export const UserModel = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
 
@@ -65,6 +71,8 @@ const RoomSchema = new Schema<IRoom>({
   isPrivate: { type: Boolean, required: true, default: false },
   isClosed: { type: Boolean, required: true, default: false }
 });
+RoomSchema.index({ id: 1 });
+RoomSchema.index({ code: 1 });
 RoomSchema.plugin(fieldEncryption, { fields: ['name'], secret });
 export const RoomModel = mongoose.models.Room || mongoose.model<IRoom>('Room', RoomSchema);
 
@@ -91,6 +99,7 @@ const MessageSchema = new Schema<IMessage>({
   time: { type: String, required: true },
   timestamp: { type: Number, required: true, default: Date.now }
 });
+MessageSchema.index({ roomId: 1, timestamp: 1 });
 MessageSchema.plugin(fieldEncryption, { fields: ['encryptedText', 'senderEmail', 'senderName'], secret });
 export const MessageModel = mongoose.models.Message || mongoose.model<IMessage>('Message', MessageSchema);
 
@@ -147,4 +156,21 @@ const BannedIPSchema = new Schema<IBannedIP>({
 });
 BannedIPSchema.plugin(fieldEncryption, { fields: ['ip'], secret });
 export const BannedIPModel = mongoose.models.BannedIP || mongoose.model<IBannedIP>('BannedIP', BannedIPSchema);
+
+// Persistent Session Store
+export interface ISession extends Document {
+  token: string;
+  userId: string;
+  isAdmin2FA?: boolean;
+  createdAt: number;
+}
+const SessionSchema = new Schema<ISession>({
+  token: { type: String, required: true, unique: true, index: true },
+  userId: { type: String, required: true, index: true },
+  isAdmin2FA: { type: Boolean, default: false },
+  createdAt: { type: Number, default: Date.now }
+});
+SessionSchema.index({ token: 1 });
+export const SessionModel = mongoose.models.Session || mongoose.model<ISession>('Session', SessionSchema);
+
 

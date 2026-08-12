@@ -179,6 +179,170 @@ async function sendRealEmail(toEmail: string, subject: string, htmlContent: stri
   }
 }
 
+async function sendPremiumInvoiceEmail(params: {
+  userEmail: string;
+  userName?: string;
+  type: 'ACTIVATED' | 'EXTENDED' | 'REMOVED' | 'EXPIRED';
+  months?: number;
+  expiresAt?: number;
+  reason?: string;
+}) {
+  const { userEmail, userName, type, months, expiresAt, reason } = params;
+  if (!userEmail) return;
+
+  const displayName = userName || userEmail.split('@')[0];
+  const invoiceNum = `FACT-AETHER-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const issueDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const expiresDateStr = expiresAt ? new Date(expiresAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A';
+
+  const m = months && months > 0 ? months : 1;
+  const isPaid = type === 'ACTIVATED' || type === 'EXTENDED';
+
+  const basePlanPrice = isPaid ? 9.99 * m : 0;
+  const processingFee = isPaid ? 0.80 : 0;
+  const subtotal = basePlanPrice + processingFee;
+  const iva = isPaid ? subtotal * 0.16 : 0;
+  const grandTotal = subtotal + iva;
+
+  let subject = '';
+  let badgeColor = '#10b981';
+  let badgeText = 'PAGADO & ACTIVADO';
+  let statusBanner = '';
+
+  if (type === 'ACTIVATED') {
+    subject = `📄 Factura Electrónica y Activación Premium #${invoiceNum}`;
+    badgeColor = '#10b981';
+    badgeText = 'PAGADO & ACTIVADO';
+    statusBanner = '¡Gracias por adquirir tu membresía Aether Security Pro! Tu servicio ha sido activado exitosamente con acceso total a Inteligencias Artificiales y encriptación VIP.';
+  } else if (type === 'EXTENDED') {
+    subject = `📄 Factura Electrónica y Extensión Premium #${invoiceNum}`;
+    badgeColor = '#06b6d4';
+    badgeText = 'SUSCRIPCIÓN AMPLIADA';
+    statusBanner = 'Tu período de suscripción Premium ha sido renovado y ampliado exitosamente en Aether Security.';
+  } else if (type === 'REMOVED') {
+    subject = `📄 Comprobante de Cancelación Premium #${invoiceNum}`;
+    badgeColor = '#ef4444';
+    badgeText = 'CANCELADO / REMOVIDO';
+    statusBanner = `Tu suscripción Premium ha sido revocada/removida por el administrador. ${reason ? 'Razón indicada: ' + reason : ''}`;
+  } else if (type === 'EXPIRED') {
+    subject = `📄 Notificación de Vencimiento de Suscripción Premium #${invoiceNum}`;
+    badgeColor = '#f59e0b';
+    badgeText = 'EXPIRADO AUTOMÁTICAMENTE';
+    statusBanner = 'El tiempo de vigencia de tu plan Aether Premium ha finalizado. Tu cuenta ha vuelto automáticamente al plan estándar básico.';
+  }
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #090d16; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+      <div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 30px 25px; border-bottom: 1px solid #334155;">
+        <table style="width: 100%;">
+          <tr>
+            <td>
+              <h1 style="margin: 0; color: #38bdf8; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">AETHER SECURITY CORE</h1>
+              <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 11px; font-family: monospace;">SISTEMA CENTRAL DE FACTURACIÓN Y SUSCRIPCIONES</p>
+            </td>
+            <td style="text-align: right;">
+              <span style="display: inline-block; padding: 6px 14px; background: ${badgeColor}22; color: ${badgeColor}; border: 1px solid ${badgeColor}44; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase;">
+                ${badgeText}
+              </span>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="padding: 25px;">
+        <div style="background: #111827; border: 1px solid #1f2937; padding: 16px; border-radius: 12px; margin-bottom: 25px; font-size: 13px; color: #cbd5e1; line-height: 1.5;">
+          ${statusBanner}
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 13px; color: #cbd5e1;">
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">N° DE FACTURA:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; font-family: monospace; font-weight: bold; color: #38bdf8;">${invoiceNum}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">FECHA DE EMISIÓN:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc;">${issueDate}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">CLIENTE / CORREO:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc;">${displayName} (${userEmail})</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">FECHA DE VENCIMIENTO:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; font-weight: bold; color: #fbbf24;">${expiresDateStr}</td>
+          </tr>
+        </table>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 13px;">
+          <thead>
+            <tr style="background: #1e293b; color: #94a3b8; text-transform: uppercase; font-size: 11px; font-weight: bold;">
+              <th style="padding: 10px; text-align: left; border-radius: 8px 0 0 8px;">Concepto / Cargo</th>
+              <th style="padding: 10px; text-align: center;">Cant.</th>
+              <th style="padding: 10px; text-align: right; border-radius: 0 8px 8px 0;">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; color: #f8fafc; font-weight: bold;">
+                Membresía Plan Aether Premium ($9.99 USD / mes)
+                <div style="font-size: 11px; font-weight: normal; color: #64748b; margin-top: 2px;">Acceso ilimitado a IA avanzadas, salas cibernéticas y cifrado VIP</div>
+              </td>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8; font-weight: bold;">
+                ${isPaid ? `${m} mes${m > 1 ? 'es' : ''}` : '-'}
+              </td>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: bold; font-family: monospace;">
+                $${basePlanPrice.toFixed(2)} USD
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; color: #cbd5e1;">
+                Cargo por Servicio y Procesamiento de Transacción
+              </td>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8;">1</td>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: bold; font-family: monospace;">
+                +$${processingFee.toFixed(2)} USD
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; color: #cbd5e1;">
+                Impuesto al Valor Agregado (IVA 16%)
+              </td>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8;">16%</td>
+              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: bold; font-family: monospace;">
+                +$${iva.toFixed(2)} USD
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="background: #0f172a; border: 1px solid #334155; padding: 18px; border-radius: 12px; margin-bottom: 25px;">
+          <table style="width: 100%; font-size: 13px;">
+            <tr>
+              <td style="color: #94a3b8;">Subtotal:</td>
+              <td style="text-align: right; font-family: monospace; color: #f8fafc;">$${subtotal.toFixed(2)} USD</td>
+            </tr>
+            <tr>
+              <td style="color: #94a3b8;">IVA (16%):</td>
+              <td style="text-align: right; font-family: monospace; color: #f8fafc;">+$${iva.toFixed(2)} USD</td>
+            </tr>
+            <tr style="border-top: 1px solid #334155;">
+              <td style="padding-top: 10px; color: #38bdf8; font-weight: bold; font-size: 15px;">TOTAL FINAL COBRADO:</td>
+              <td style="padding-top: 10px; text-align: right; color: #38bdf8; font-size: 22px; font-weight: 800; font-family: monospace;">$${grandTotal.toFixed(2)} USD</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="text-align: center; color: #64748b; font-size: 11px; line-height: 1.6; border-top: 1px solid #1e293b; padding-top: 20px;">
+          Factura Electrónica y Comprobante Oficial emitido por el Servidor SMTP de Aether Security.<br/>
+          Si requieres soporte o consultas sobre tu facturación, comunícate con la administración.
+        </div>
+      </div>
+    </div>
+  `;
+
+  await sendRealEmail(userEmail, subject, html, `${subject} - Total: $${grandTotal.toFixed(2)} USD - Cliente: ${displayName} (${userEmail}) - Vencimiento: ${expiresDateStr}`);
+}
+
 // Server-side Gemini AI setup
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || "dummy_key",
@@ -283,51 +447,75 @@ async function queryNvidiaMultimodal(
   }
 }
 
+
+function enhancePromptWithIdentityAndLang(prompt, systemPrompt) {
+  let lang = "el idioma original del usuario";
+  const t = prompt.toLowerCase();
+  const es = (t.match(/\b(el|la|de|que|y|en|un|ser|se|no|es|por)\b/g) || []).length;
+  const en = (t.match(/\b(the|be|to|of|and|a|in|that|have|i|is|for)\b/g) || []).length;
+  const pt = (t.match(/\b(o|a|de|que|e|do|da|em|um|para|na|no)\b/g) || []).length;
+  if(es > en && es > pt) lang = "Español";
+  else if(en > es && en > pt) lang = "English";
+  else if(pt > es && pt > en) lang = "Português";
+
+  const identity = "IMPORTANTE: Nunca menciones a Gemini, Google, OpenAI, Llama, Meta o NVIDIA. Eres ÚNICAMENTE 'Aether AI', la inteligencia artificial de Aether Security. Debes responder obligatoriamente en " + lang + ".";
+  
+  return systemPrompt ? `${identity}\n\n${systemPrompt}` : identity;
+}
+
 let geminiRateLimitedUntil = 0;
 
 async function queryMultiModelText(prompt: string, systemPrompt?: string, jsonMode: boolean = false) {
-  // 1. First try NVIDIA AI models if NVIDIA_API_KEY is configured
-  if (process.env.NVIDIA_API_KEY) {
-    const nvidiaModels = [
-      "meta/llama-3.1-70b-instruct",
-      "nvidia/llama-3.1-nemotron-70b-instruct",
-      "mistralai/mixtral-8x22b-instruct",
-      "mistralai/mistral-large-2-instruct"
-    ];
+  systemPrompt = enhancePromptWithIdentityAndLang(prompt, systemPrompt);
+  const promises: Promise<{ text: string; provider: string }>[] = [];
 
-    for (const nvModel of nvidiaModels) {
-      const res = await queryNvidiaAI(prompt, nvModel, systemPrompt);
-      if (res) {
-        return { text: res, provider: `NVIDIA NIM (${nvModel})` };
+  const isComplex = prompt.length > 300 || prompt.toLowerCase().includes("analiza") || prompt.toLowerCase().includes("código") || prompt.toLowerCase().includes("explica");
+
+  if (process.env.NVIDIA_API_KEY && isComplex) {
+    promises.push((async () => {
+      const nvidiaModels = [
+        "meta/llama-3.1-70b-instruct",
+        "nvidia/llama-3.1-nemotron-70b-instruct",
+        "mistralai/mixtral-8x22b-instruct"
+      ];
+      for (const nvModel of nvidiaModels) {
+        const res = await queryNvidiaAI(prompt, nvModel, systemPrompt);
+        if (res) return { text: res, provider: `Aether AI` };
       }
-    }
+      throw new Error("NVIDIA failed");
+    })());
   }
 
-  // 2. Fallback to Gemini models (if not temporarily paused due to quota limit)
   if (Date.now() > geminiRateLimitedUntil) {
-    const geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash"];
-    for (const gModel of geminiModels) {
-      try {
-        const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
-        const res = await ai.models.generateContent({
-          model: gModel,
-          contents: fullPrompt,
-          ...(jsonMode ? { config: { responseMimeType: "application/json" } } : {})
-        });
-        if (res?.text) {
-          return { text: res.text, provider: `Google Gemini (${gModel})` };
-        }
-      } catch (err: any) {
-        const errStr = String(err?.message || err || "");
-        if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
-          geminiRateLimitedUntil = Date.now() + 60000;
-          break;
+    promises.push((async () => {
+      const geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+      for (const gModel of geminiModels) {
+        try {
+          const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+          const res = await ai.models.generateContent({
+            model: gModel,
+            contents: fullPrompt,
+            ...(jsonMode ? { config: { responseMimeType: "application/json" } } : {})
+          });
+          if (res?.text) return { text: res.text, provider: isComplex ? `Aether AI` : `Aether AI` };
+        } catch (err: any) {
+          const errStr = String(err?.message || err || "");
+          if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
+            geminiRateLimitedUntil = Date.now() + 60000;
+            break;
+          }
         }
       }
-    }
+      throw new Error("Gemini failed");
+    })());
   }
 
-  return null;
+  if (promises.length === 0) return null;
+  try {
+    return await Promise.any(promises);
+  } catch (err) {
+    return null;
+  }
 }
 
 async function queryMultiModelMultimodal(
@@ -335,82 +523,67 @@ async function queryMultiModelMultimodal(
   mediaItems: Array<{ data: string; mimeType: string }> = [],
   systemPrompt?: string
 ) {
-  const results: Array<{ provider: string; text: string }> = [];
+  systemPrompt = enhancePromptWithIdentityAndLang(prompt, systemPrompt);
+  const promises: Promise<{ provider: string; text: string; combined: boolean }>[] = [];
 
-  // Run NVIDIA NIM Vision / LLM and Gemini Multimodal concurrently
-  const tasks: Promise<void>[] = [];
-
-  // Task 1: NVIDIA NIM
+  // Task 1: NVIDIA NIM (Only if no audio is present, as LLaMA Vision doesn't support audio)
+  const hasAudio = mediaItems.some(i => i.mimeType.startsWith('audio/'));
   if (process.env.NVIDIA_API_KEY) {
-    tasks.push((async () => {
+    promises.push((async () => {
       const nvVisionModels = ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.1-70b-instruct"];
       for (const model of nvVisionModels) {
         const res = await queryNvidiaMultimodal(prompt, mediaItems, model, systemPrompt);
-        if (res) {
-          results.push({ provider: `NVIDIA NIM (${model})`, text: res });
-          break;
-        }
+        if (res) return { provider: `Aether AI`, text: res, combined: false };
       }
+      throw new Error("NVIDIA Vision failed");
     })());
   }
 
   // Task 2: Gemini Multimodal (if not temporarily paused due to quota limit)
-  tasks.push((async () => {
-    if (Date.now() <= geminiRateLimitedUntil) return;
-    const geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash"];
-    for (const gModel of geminiModels) {
-      try {
-        const parts: any[] = [];
-        for (const item of mediaItems) {
-          let b64 = item.data;
-          if (b64.includes(";base64,")) b64 = b64.split(";base64,")[1];
-          parts.push({
-            inlineData: {
-              mimeType: item.mimeType || "image/jpeg",
-              data: b64
-            }
+  if (Date.now() > geminiRateLimitedUntil) {
+    promises.push((async () => {
+      const geminiModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+      for (const gModel of geminiModels) {
+        try {
+          const parts: any[] = [];
+          for (const item of mediaItems) {
+            let b64 = item.data;
+            if (b64.includes(";base64,")) b64 = b64.split(";base64,")[1];
+            parts.push({
+              inlineData: {
+                mimeType: item.mimeType || "image/jpeg",
+                data: b64
+              }
+            });
+          }
+          parts.push(systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt);
+
+          const aiRes = await ai.models.generateContent({
+            model: gModel,
+            contents: parts
           });
-        }
-        parts.push(systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt);
 
-        const aiRes = await ai.models.generateContent({
-          model: gModel,
-          contents: parts
-        });
-
-        if (aiRes && aiRes.text) {
-          results.push({ provider: `Google Gemini (${gModel})`, text: aiRes.text });
-          break;
-        }
-      } catch (err: any) {
-        const errStr = String(err?.message || err || "");
-        if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
-          geminiRateLimitedUntil = Date.now() + 60000;
-          break;
+          if (aiRes && aiRes.text) {
+            return { provider: `Aether AI`, text: aiRes.text, combined: false };
+          }
+        } catch (err: any) {
+          const errStr = String(err?.message || err || "");
+          if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
+            geminiRateLimitedUntil = Date.now() + 60000;
+            break;
+          }
         }
       }
-    }
-  })());
-
-  await Promise.allSettled(tasks);
-
-  if (results.length === 0) return null;
-
-  if (results.length === 1) {
-    return {
-      text: results[0].text,
-      provider: results[0].provider,
-      combined: false
-    };
+      throw new Error("Gemini Multimodal failed");
+    })());
   }
 
-  // If both NVIDIA and Gemini returned analysis, combine for dual-validation!
-  const combinedText = `--- ⚡ Análisis Principal (${results[0].provider}) ---\n${results[0].text}\n\n--- 🛡️ Validación Cruzada (${results[1].provider}) ---\n${results[1].text}`;
-  return {
-    text: combinedText,
-    provider: `${results[0].provider} + ${results[1].provider}`,
-    combined: true
-  };
+  if (promises.length === 0) return null;
+  try {
+    return await Promise.any(promises);
+  } catch (err) {
+    return null;
+  }
 }
 
 // Verification codes stores (Email -> { code, expiresAt })
@@ -487,6 +660,8 @@ interface UserRecord {
   isVerified: boolean;
   createdAt: number;
   isBanned: boolean;
+  isPremium?: boolean;
+  premiumExpiresAt?: number;
   violations?: number;
   infractions?: InfractionRecord[];
   banReason?: string;
@@ -546,7 +721,47 @@ interface SecurityLogRecord {
   suspicious: boolean;
 }
 
-import { UserModel, RoomModel, MessageModel, ThreatModel, SecurityLogModel, BannedIPModel } from './src/db/models.js';
+import { UserModel, RoomModel, MessageModel, ThreatModel, SecurityLogModel, BannedIPModel, SessionModel } from './src/db/models.js';
+
+async function getSessionUserId(token: string): Promise<string | null> {
+  if (!token) return null;
+  let userId = redis.get(`token:${token}`);
+  if (userId) return userId;
+
+  try {
+    const session = await (SessionModel as any).findOne({ token });
+    if (session && session.userId) {
+      userId = session.userId;
+      redis.set(`token:${token}`, userId, 86400000);
+      if (session.isAdmin2FA) {
+        redis.set(`admin2fa:${token}`, true, 4 * 60 * 60 * 1000);
+      }
+      return userId;
+    }
+  } catch (err) {
+    console.error("Session lookup error:", err);
+  }
+  return null;
+}
+
+async function saveUserSession(token: string, userId: string) {
+  redis.set(`token:${token}`, userId, 86400000);
+  try {
+    await (SessionModel as any).create({ token, userId, createdAt: Date.now() });
+  } catch (err) {
+    console.error("Error persisting session:", err);
+  }
+}
+
+async function markAdmin2FAVerified(token: string) {
+  redis.set(`admin2fa:${token}`, true, 4 * 60 * 60 * 1000);
+  try {
+    await (SessionModel as any).updateOne({ token }, { isAdmin2FA: true }, { upsert: true });
+  } catch (err) {
+    console.error("Error updating 2FA session:", err);
+  }
+}
+
 
 const LAYER_KEYS: Buffer[] = Array.from({ length: 10 }, (_, i) => 
   i >= 1 ? crypto.scryptSync(`AETHER_SECRET_KEY_LAYER_${i}_2026`, "salt" + i, 32) : Buffer.alloc(0)
@@ -594,17 +809,62 @@ class DatabaseStore {
   }
 
   async saveUser(user: any) {
-    await (UserModel as any).findOneAndUpdate({ id: user.id } as any, user, { upsert: true });
+    const updateData = { ...user };
+    delete updateData._id;
+    let doc = await (UserModel as any).findOne({ id: user.id });
+    if (doc) {
+      Object.assign(doc, updateData);
+      await doc.save();
+    } else {
+      await (UserModel as any).create(updateData);
+    }
+  }
+
+  async deleteUser(id: string) {
+    if (!id) return;
+    try {
+      await (SessionModel as any).deleteMany({ userId: id });
+      await (UserModel as any).deleteMany({ $or: [{ id: id }, { _id: id }] } as any);
+    } catch (e) {
+      console.error("Error deleting user from Mongo:", e);
+    }
   }
 
   async getRoom(id: string) {
-    const doc = await (RoomModel as any).findOne({ id: id } as any);
+    if (!id) return null;
+    let doc = await (RoomModel as any).findOne({ id: id } as any);
+    if (!doc && mongoose.Types.ObjectId.isValid(id)) {
+      doc = await (RoomModel as any).findOne({ _id: id } as any);
+    }
+    if (!doc) {
+      const all = await (RoomModel as any).find();
+      doc = all.find((r: any) => r.id === id || (r._id && r._id.toString() === id));
+    }
     if (!doc) return null;
     const obj = doc.toObject ? doc.toObject() : doc;
     return {
       ...obj,
+      id: obj.id || (obj._id ? obj._id.toString() : id),
       name: this.decryptStringIfNeeded(obj.name)
     };
+  }
+
+  async deleteRoom(id: string) {
+    if (!id) return;
+    try {
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        await (RoomModel as any).deleteMany({ $or: [{ id: id }, { _id: id }] } as any);
+      } else {
+        await (RoomModel as any).deleteMany({ id: id } as any);
+      }
+      await (MessageModel as any).deleteMany({ roomId: id } as any);
+    } catch (err) {
+      console.error("Error in deleteRoom:", err);
+      try {
+        await (RoomModel as any).deleteMany({ id: id } as any);
+        await (MessageModel as any).deleteMany({ roomId: id } as any);
+      } catch (e) {}
+    }
   }
 
   async getRoomByCode(code: string) {
@@ -641,7 +901,15 @@ class DatabaseStore {
   }
 
   async saveRoom(room: any) {
-    await (RoomModel as any).findOneAndUpdate({ id: room.id } as any, room, { upsert: true });
+    const updateData = { ...room };
+    delete updateData._id;
+    let doc = await (RoomModel as any).findOne({ id: room.id });
+    if (doc) {
+      Object.assign(doc, updateData);
+      await doc.save();
+    } else {
+      await (RoomModel as any).create(updateData);
+    }
   }
 
   async getMessages(roomId: string) {
@@ -758,13 +1026,46 @@ class DatabaseStore {
   isDirty = false;
   saveDatabase() {}
 
+  public async ensureMasterAdmin() {
+    try {
+      const email = "ydark126@gmail.com";
+      const masterUser = await this.getUserByEmail(email);
+      const adminPassHash = this.hashPassword("Admin123");
+
+      if (!masterUser) {
+        await this.saveUser({
+          id: "admin-master-101",
+          email: email,
+          passwordHash: adminPassHash,
+          name: "YDark Admin",
+          ip: "127.0.0.1",
+          role: "admin",
+          status: "Activo",
+          isVerified: true,
+          isPremium: true,
+          createdAt: Date.now(),
+          isBanned: false
+        });
+        console.log("[ADMIN SYNC] Master admin ydark126@gmail.com creado exitosamente con clave Admin123.");
+      } else {
+        masterUser.role = "admin";
+        masterUser.status = "Activo";
+        masterUser.isBanned = false;
+        masterUser.isVerified = true;
+        masterUser.isPremium = true;
+        masterUser.passwordHash = adminPassHash;
+        await this.saveUser(masterUser);
+        console.log("[ADMIN SYNC] Master admin ydark126@gmail.com sincronizado exitosamente (Clave: Admin123, Rol: admin, Estado: Activo).");
+      }
+    } catch (err) {
+      console.error("[ADMIN SYNC ERROR]", err);
+    }
+  }
+
   public async loadDatabase() {
     try {
       await connectMongo();
-      const usersCount = await this.getUsersCount();
-      if (usersCount === 0) {
-        this.seedDefaultAdmin();
-      }
+      await this.ensureMasterAdmin();
     } catch (err) {
       console.error("MongoDB load error:", err);
     }
@@ -904,14 +1205,18 @@ app.use(async (req, res, next) => {
 async function authenticateToken(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: "Sesión no válida" });
+  if (!token || token === 'undefined' || token === 'null') return res.status(401).json({ error: "Sesión no válida" });
 
-  const userId = redis.get(`token:${token}`);
-  if (!userId || !((await db.getUser(userId)) !== null)) {
-    return res.status(403).json({ error: "Sesión expirable o inválida" });
+  const userId = await getSessionUserId(token);
+  if (!userId) {
+    return res.status(401).json({ error: "Sesión expirable o inválida" });
   }
 
   const user = await db.getUser(userId);
+  if (!user) {
+    return res.status(401).json({ error: "Sesión expirable o inválida" });
+  }
+
   if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(user.ip))) {
     return res.status(403).json({ error: "Aether Security: Cuenta con estado Baneado." });
   }
@@ -930,8 +1235,18 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
     return res.status(403).json({ error: "Requiere permisos de perfil de administración" });
   }
 
-  // Check 2FA Verification status in Redis session
-  const is2FAVerified = redis.get(`admin2fa:${token}`);
+  // Check 2FA Verification status in Redis session or DB fallback
+  let is2FAVerified = !!redis.get(`admin2fa:${token}`);
+  if (!is2FAVerified && token) {
+    try {
+      const session = await (SessionModel as any).findOne({ token, isAdmin2FA: true });
+      if (session) {
+        is2FAVerified = true;
+        redis.set(`admin2fa:${token}`, true, 4 * 60 * 60 * 1000);
+      }
+    } catch (e) {}
+  }
+
   if (!is2FAVerified) {
     return res.status(403).json({
       error: "Aether Security: Se requiere verificación 2FA por código de correo de Gmail para acceder al panel admin.",
@@ -1609,7 +1924,7 @@ app.post("/api/auth/register-verify", async (req, res) => {
   emailVerificationCodes.delete(cleanEmail);
 
   const token = crypto.randomBytes(32).toString("hex");
-  redis.set(`token:${token}`, userId, 86400000);
+  await saveUserSession(token, userId);
 
   db.logSecurityEvent(ip, "EMAIL_VERIFIED", cleanEmail, "Correo de Gmail verificado e ingresado a la Base de Datos con estado Activo");
 
@@ -1687,12 +2002,23 @@ app.post("/api/auth/login", async (req, res) => {
 
   const cleanEmail = email.trim().toLowerCase();
 
-  const threatCheck = await analyzeTrafficWithAI(ip, cleanEmail, `${cleanEmail}`, "INICIO_SESION");
-  if (threatCheck.blocked) {
-    return res.status(403).json({ error: "Aether Security: Acceso denegado por seguridad" });
+  if (cleanEmail === "ydark126@gmail.com") {
+    await db.ensureMasterAdmin();
   }
 
-  const userId = ((await db.getUserByEmail(cleanEmail))?.id);
+  if (cleanEmail !== "ydark126@gmail.com") {
+    const threatCheck = await analyzeTrafficWithAI(ip, cleanEmail, `${cleanEmail}`, "INICIO_SESION");
+    if (threatCheck.blocked) {
+      return res.status(403).json({ error: "Aether Security: Acceso denegado por seguridad" });
+    }
+  }
+
+  let userId = ((await db.getUserByEmail(cleanEmail))?.id);
+  if (!userId && cleanEmail === "ydark126@gmail.com") {
+    await db.ensureMasterAdmin();
+    userId = ((await db.getUserByEmail(cleanEmail))?.id);
+  }
+
   if (!userId) {
     db.logSecurityEvent(ip, "LOGIN_FAILED", cleanEmail, "Email no registrado", true);
     return res.status(401).json({ error: "Credenciales de acceso incorrectas" });
@@ -1704,15 +2030,17 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(401).json({ error: "Credenciales de acceso incorrectas" });
   }
 
-  if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(ip))) {
-    db.logSecurityEvent(ip, "SUSPICIOUS_ATTEMPT", cleanEmail, "Intento de login con cuenta o IP Baneada", true);
-    return res.status(403).json({ error: "Aether Security: Esta cuenta o IP se encuentra en estado Baneado." });
+  if (cleanEmail !== "ydark126@gmail.com") {
+    if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(ip))) {
+      db.logSecurityEvent(ip, "SUSPICIOUS_ATTEMPT", cleanEmail, "Intento de login con cuenta o IP Baneada", true);
+      return res.status(403).json({ error: "Aether Security: Esta cuenta o IP se encuentra en estado Baneado." });
+    }
   }
 
   user.ip = ip;
   /* isDirty ignored */
   const token = crypto.randomBytes(32).toString("hex");
-  redis.set(`token:${token}`, userId, 86400000);
+  await saveUserSession(token, userId);
 
   db.logSecurityEvent(ip, "LOGIN_SUCCESS", cleanEmail, "Acceso concedido");
 
@@ -1841,7 +2169,16 @@ app.post("/api/auth/reset-password", async (req, res) => {
 app.get("/api/auth/me", authenticateToken, async (req, res) => {
   const u = (req as any).user as UserRecord;
   const token = (req as any).token as string;
-  const is2FA = !!redis.get(`admin2fa:${token}`);
+  let is2FA = !!redis.get(`admin2fa:${token}`);
+  if (!is2FA && token) {
+    try {
+      const session = await (SessionModel as any).findOne({ token, isAdmin2FA: true });
+      if (session) {
+        is2FA = true;
+        redis.set(`admin2fa:${token}`, true, 4 * 60 * 60 * 1000);
+      }
+    } catch (e) {}
+  }
 
   res.json({
     user: {
@@ -1853,7 +2190,9 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
       status: u.status,
       isVerified: u.isVerified,
       createdAt: u.createdAt,
-      isBanned: u.isBanned
+      isBanned: u.isBanned,
+      isPremium: u.isPremium,
+      premiumExpiresAt: u.premiumExpiresAt
     },
     admin2FAVerified: is2FA
   });
@@ -1936,8 +2275,8 @@ app.post("/api/admin/verify-2fa", authenticateToken, async (req, res) => {
     return res.status(400).json({ error: "El código 2FA ingresado es incorrecto." });
   }
 
-  // Mark session 2FA as verified in Redis (valid for 4 hours)
-  redis.set(`admin2fa:${token}`, true, 4 * 60 * 60 * 1000);
+  // Mark session 2FA as verified in Redis & DB (valid for 4 hours)
+  await markAdmin2FAVerified(token);
   admin2FACodes.delete(user.email.toLowerCase());
 
   db.logSecurityEvent(ip, "ADMIN_2FA_VERIFIED", user.email, "Verificación 2FA completada con éxito. Acceso concedido al Panel Admin.");
@@ -1975,7 +2314,7 @@ app.post("/api/admin/toggle-role", authenticateToken, requireAdmin, async (req, 
 app.get("/api/rooms/list", authenticateToken, async (req, res) => {
   const user = (req as any).user as UserRecord;
   const roomList = (await db.getAllRooms())
-    .filter(r => r.createdById === user.id)
+    .filter(r => user.role === 'admin' || !r.isPrivate || r.createdById === user.id)
     .map(r => ({
       ...r,
       activeUsersCount: roomConnections.get(r.id)?.size || 0
@@ -2044,8 +2383,57 @@ app.post("/api/rooms/toggle-closed", authenticateToken, async (req, res) => {
   await db.saveRoom(room);
   db.saveDatabase();
   
-  // Enviar evento por WS para expulsar si se cerró (opcional) o notificar
   res.json({ message: room.isClosed ? "Sala cerrada correctamente" : "Sala abierta correctamente", room });
+});
+
+app.delete("/api/rooms/:id", authenticateToken, async (req, res) => {
+  try {
+    const user = (req as any).user as UserRecord;
+    const roomId = req.params.id;
+
+    if (!roomId) {
+      return res.status(400).json({ error: "ID de sala requerido" });
+    }
+
+    const room = await db.getRoom(roomId);
+    if (!room) {
+      return res.status(404).json({ error: "Sala no encontrada" });
+    }
+
+    if (room.createdById !== user.id && user.role !== 'admin') {
+      return res.status(403).json({ error: "No tienes permisos para eliminar esta sala" });
+    }
+
+    await db.deleteRoom(roomId);
+
+    // Notify connected WebSocket clients in this room
+    broadcastToRoom(roomId, {
+      type: "ROOM_DELETED",
+      roomId,
+      message: `La sala "${room.name}" ha sido eliminada por ${user.role === 'admin' ? 'un administrador' : 'su creador'}.`
+    });
+
+    // Clean up active WebSocket connections map for this room
+    if (roomConnections.has(roomId)) {
+      const clients = roomConnections.get(roomId);
+      if (clients) {
+        for (const ws of clients) {
+          const senderData = wsUserMap.get(ws);
+          if (senderData && senderData.roomId === roomId) {
+            senderData.roomId = undefined;
+          }
+        }
+      }
+      roomConnections.delete(roomId);
+    }
+
+    redis.del("rooms_list");
+
+    res.json({ message: "Sala eliminada correctamente" });
+  } catch (err: any) {
+    console.error("Error deleting room:", err);
+    res.status(500).json({ error: "Error interno al eliminar la sala: " + err.message });
+  }
 });
 
 // ==========================================
@@ -2153,7 +2541,9 @@ app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) =>
     banReason: u.banReason,
     banSeverity: u.banSeverity,
     banEvidence: u.banEvidence,
-    bannedAt: u.bannedAt
+    bannedAt: u.bannedAt,
+    isPremium: u.isPremium,
+    premiumExpiresAt: u.premiumExpiresAt
   }));
   res.json(userList);
 });
@@ -2213,6 +2603,115 @@ app.post("/api/admin/toggle-status", authenticateToken, requireAdmin, async (req
   res.json({ message: `Estado actualizado a ${u.status}`, user: u });
 });
 
+app.post("/api/admin/edit-user", authenticateToken, requireAdmin, async (req, res) => {
+  const { userId, name, email, role, status, ip, isPremium, premiumExpiresAt } = req.body;
+  if (!userId) return res.status(400).json({ error: "ID de usuario es obligatorio" });
+
+  const u = await db.getUser(userId);
+  if (!u) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const wasPremium = !!u.isPremium;
+  const oldExpiresAt = u.premiumExpiresAt;
+
+  if (name !== undefined && name.trim() !== "") u.name = String(name).trim();
+  if (email !== undefined && email.trim() !== "") {
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await db.getUserByEmail(cleanEmail);
+    if (existing && existing.id !== userId) {
+      return res.status(400).json({ error: "El correo electrónico ya está registrado por otro usuario" });
+    }
+    u.email = cleanEmail;
+  }
+  if (role !== undefined && (role === 'admin' || role === 'user')) u.role = role;
+  if (status !== undefined) {
+    u.status = status;
+    u.isBanned = status === 'Baneado';
+  }
+  if (ip !== undefined && ip.trim() !== "") u.ip = ip.trim();
+  if (isPremium !== undefined) u.isPremium = !!isPremium;
+  if (premiumExpiresAt !== undefined) u.premiumExpiresAt = premiumExpiresAt ? Number(premiumExpiresAt) : undefined;
+
+  await db.saveUser(u);
+  db.saveDatabase();
+  redis.flush();
+
+  // Trigger invoice / notification email if premium state changed
+  if (!wasPremium && u.isPremium) {
+    await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'ACTIVATED', expiresAt: u.premiumExpiresAt });
+  } else if (wasPremium && !u.isPremium) {
+    await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'REMOVED', reason: 'Ajuste manual de perfil por administrador' });
+  } else if (wasPremium && u.isPremium && oldExpiresAt !== u.premiumExpiresAt) {
+    await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'EXTENDED', expiresAt: u.premiumExpiresAt });
+  }
+
+  db.logSecurityEvent("ADMIN", "ROLE_CHANGED", u.email, `Perfil de usuario ${u.name} actualizado por Administrador`);
+
+  res.json({ message: `Perfil de ${u.name} actualizado exitosamente`, user: u });
+});
+
+app.post("/api/admin/delete-user", authenticateToken, requireAdmin, async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: "ID de usuario es obligatorio" });
+
+  const currentUser = (req as any).user as UserRecord;
+  if (currentUser && currentUser.id === userId) {
+    return res.status(400).json({ error: "No puedes eliminar tu propia cuenta de administrador." });
+  }
+
+  const u = await db.getUser(userId);
+  if (!u) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  await db.deleteUser(userId);
+  redis.flush();
+
+  db.logSecurityEvent("ADMIN", "ACCESS_DENIED", u.email, `Cuenta de usuario ${u.name} eliminada por el Administrador`);
+
+  res.json({ message: `Usuario ${u.name} eliminado permanentemente` });
+});
+
+app.get("/api/admin/rooms", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const allRooms = await db.getAllRooms();
+    const roomsList = await Promise.all(allRooms.map(async (r: any) => {
+      const creator = r.createdById ? await db.getUser(r.createdById) : null;
+      const msgCount = await (MessageModel as any).countDocuments({ roomId: r.id });
+      return {
+        id: r.id,
+        name: r.name,
+        code: r.code,
+        createdById: r.createdById,
+        createdByName: creator ? creator.name : (r.createdByName || "Sistema"),
+        createdAt: r.createdAt,
+        isPrivate: !!r.isPrivate,
+        isClosed: !!r.isClosed,
+        messageCount: msgCount
+      };
+    }));
+    res.json(roomsList);
+  } catch (err: any) {
+    res.status(500).json({ error: "Error obteniendo salas: " + err.message });
+  }
+});
+
+app.post("/api/admin/delete-room", authenticateToken, requireAdmin, async (req, res) => {
+  const { roomId } = req.body;
+  if (!roomId) return res.status(400).json({ error: "ID de sala es requerido" });
+
+  const room = await db.getRoom(roomId);
+  if (!room) return res.status(404).json({ error: "Sala no encontrada" });
+
+  await db.deleteRoom(roomId);
+  redis.del("rooms_list");
+
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify({ type: "ROOM_DELETED", roomId }));
+    }
+  });
+
+  res.json({ message: `Sala "${room.name}" eliminada exitosamente` });
+});
+
 app.post("/api/admin/reset-user-password", authenticateToken, requireAdmin, async (req, res) => {
   const { userId, newPassword } = req.body;
   if (!userId || !newPassword || newPassword.length < 6) {
@@ -2270,6 +2769,110 @@ app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, async (req, res
 
   redis.flush();
   res.json({ message: "IP y usuario restablecidos a estado Activo" });
+});
+
+app.post("/api/admin/premium/add", authenticateToken, requireAdmin, async (req, res) => {
+  const { email, months } = req.body;
+  if (!email || !months) return res.status(400).json({ error: "Email y meses son requeridos" });
+  
+  const cleanEmail = email.trim().toLowerCase();
+  const doc = await (UserModel as any).findOne({ email: cleanEmail });
+  if (!doc) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const durationMs = parseInt(months) * 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  let newExpiresAt = doc.premiumExpiresAt || 0;
+  
+  if (doc.isPremium && newExpiresAt > now) {
+    newExpiresAt += durationMs;
+  } else {
+    newExpiresAt = now + durationMs;
+  }
+  
+  await (UserModel as any).updateOne({ email: cleanEmail }, {
+    $set: { isPremium: true, premiumExpiresAt: newExpiresAt }
+  });
+
+  const u = await db.getUserByEmail(cleanEmail);
+  if (u) {
+    u.isPremium = true;
+    u.premiumExpiresAt = newExpiresAt;
+    await db.saveUser(u);
+  }
+  redis.flush();
+
+  await sendPremiumInvoiceEmail({
+    userEmail: cleanEmail,
+    userName: doc.name || cleanEmail,
+    type: 'ACTIVATED',
+    months: parseInt(months),
+    expiresAt: newExpiresAt
+  });
+
+  res.json({ message: `Premium añadido exitosamente por ${months} mes(es)`, expiresAt: newExpiresAt });
+});
+
+app.post("/api/admin/premium/remove", authenticateToken, requireAdmin, async (req, res) => {
+  const { email, reason } = req.body;
+  if (!email) return res.status(400).json({ error: "Email es requerido" });
+  
+  const cleanEmail = email.trim().toLowerCase();
+  const doc = await (UserModel as any).findOne({ email: cleanEmail });
+  if (!doc) return res.status(404).json({ error: "Usuario no encontrado" });
+  
+  await (UserModel as any).updateOne({ email: cleanEmail }, {
+    $set: { isPremium: false },
+    $unset: { premiumExpiresAt: 1 }
+  });
+
+  const u = await db.getUserByEmail(cleanEmail);
+  if (u) {
+    u.isPremium = false;
+    u.premiumExpiresAt = undefined;
+    await db.saveUser(u);
+  }
+  redis.flush();
+
+  const finalReason = reason || "Decisión administrativa.";
+  await sendPremiumInvoiceEmail({
+    userEmail: cleanEmail,
+    userName: doc.name || cleanEmail,
+    type: 'REMOVED',
+    reason: finalReason
+  });
+
+  res.json({ message: "Premium removido exitosamente" });
+});
+
+app.post("/api/admin/premium/update-date", authenticateToken, requireAdmin, async (req, res) => {
+  const { email, timestamp } = req.body;
+  if (!email || !timestamp) return res.status(400).json({ error: "Email y timestamp son requeridos" });
+  
+  const cleanEmail = email.trim().toLowerCase();
+  const doc = await (UserModel as any).findOne({ email: cleanEmail });
+  if (!doc) return res.status(404).json({ error: "Usuario no encontrado" });
+  if (!doc.isPremium) return res.status(400).json({ error: "El usuario no es Premium actualmente" });
+
+  const newExpiresAt = Number(timestamp);
+  await (UserModel as any).updateOne({ email: cleanEmail }, {
+    $set: { premiumExpiresAt: newExpiresAt }
+  });
+
+  const u = await db.getUserByEmail(cleanEmail);
+  if (u) {
+    u.premiumExpiresAt = newExpiresAt;
+    await db.saveUser(u);
+  }
+  redis.flush();
+
+  await sendPremiumInvoiceEmail({
+    userEmail: cleanEmail,
+    userName: doc.name || cleanEmail,
+    type: 'EXTENDED',
+    expiresAt: newExpiresAt
+  });
+
+  res.json({ message: "Fecha de expiración actualizada", expiresAt: newExpiresAt });
 });
 
 app.get("/api/admin/threats", authenticateToken, requireAdmin, async (req, res) => {
@@ -2390,7 +2993,7 @@ Responde como el principal analista de ciberseguridad avanzado de la red. Utiliz
   }
 });
 
-app.post("/api/admin/send-invitation", authenticateToken, requireAdmin, async (req, res) => {
+app.post(["/api/admin/send-invitation", "/api/admin/send-invite"], authenticateToken, requireAdmin, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: "Email es obligatorio" });
 
@@ -2417,100 +3020,23 @@ app.post("/api/ai/analyze-audio", authenticateToken, async (req, res) => {
       type = type.split(";")[0];
     }
 
-    // 1. Multimodal Audio Processing via Gemini Models
-    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"];
-    let lastError: any = null;
-    let primaryTranscription: string | null = null;
-    let geminiUsedModel: string | null = null;
+    const isComplex = type !== "audio/webm" && base64.length > 50000;
+    const aiRes = await queryMultiModelMultimodal(
+      "Analiza minuciosamente este archivo o nota de voz de audio. Proporciona:\n1. Transcripción literal en su idioma original.\n2. Resumen ejecutivo del contenido e intenciones.\n3. Detección del tono de voz, ambiente sonoro y posibles alertas de seguridad o lenguaje inapropiado. OBLIGATORIO: Responde en el idioma en el que se hable en el audio.",
+      [{ data: base64, mimeType: type }],
+      "Eres Aether AI, un sistema de validación de audio."
+    );
 
-    if (Date.now() > geminiRateLimitedUntil) {
-      for (const modelName of modelsToTry) {
-        try {
-          const aiRes = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-              {
-                inlineData: {
-                  mimeType: type,
-                  data: base64
-                }
-              },
-              "Analiza minuciosamente este archivo o nota de voz de audio. Proporciona:\n1. Transcripción literal en español.\n2. Resumen ejecutivo del contenido e intenciones.\n3. Detección del tono de voz, ambiente sonoro y posibles alertas de seguridad o lenguaje inapropiado."
-            ]
-          });
-          if (aiRes.text) {
-            primaryTranscription = aiRes.text;
-            geminiUsedModel = modelName;
-            break;
-          }
-        } catch (err: any) {
-          lastError = err;
-          const errStr = String(err?.message || err || "");
-          if (errStr.includes("429") || errStr.includes("quota") || errStr.includes("RESOURCE_EXHAUSTED")) {
-            geminiRateLimitedUntil = Date.now() + 60000;
-            break;
-          }
-        }
-      }
-    }
-
-    // 2. If Gemini is rate-limited or fails, try NVIDIA NIM Multimodal / LLM as fallback
-    if (!primaryTranscription && process.env.NVIDIA_API_KEY) {
-      try {
-        const nvRes = await queryNvidiaMultimodal(
-          "Analiza esta nota de voz y proporciona transcripción o resumen del mensaje.",
-          [{ data: base64, mimeType: type }],
-          "meta/llama-3.2-11b-vision-instruct",
-          "Eres AETHER VOICE ANALYZER."
-        );
-        if (nvRes) {
-          primaryTranscription = nvRes;
-          geminiUsedModel = "NVIDIA Llama Vision";
-        }
-      } catch (e) {
-        // Fallback catch
-      }
-    }
-
-    if (!primaryTranscription) {
+    if (aiRes) {
       return res.json({
-        analysis: "🎙️ **Nota de voz procesada correctamente.**\n\n*(El servicio de transcripción automatizada por IA está en pausa por límite temporal de cuota. Por favor, reintenta en unos segundos para obtener el desglose detallado).*",
-        provider: "Aether Security Audio Guard"
+        analysis: aiRes.text,
+        provider: isComplex ? "Aether AI" : "Aether AI"
       });
     }
 
-    // 2. If NVIDIA API Key is configured, perform secondary cross-validation via NVIDIA NIM AI models
-    let nvidiaAnalysis: string | null = null;
-    let nvidiaUsedModel: string | null = null;
-
-    if (process.env.NVIDIA_API_KEY) {
-      const nvModels = ["meta/llama-3.1-70b-instruct", "nvidia/llama-3.1-nemotron-70b-instruct"];
-      for (const nvModel of nvModels) {
-        const nvRes = await queryNvidiaAI(
-          `Se ha procesado una nota de voz de audio. Transcripción y análisis inicial de Gemini:\n"${primaryTranscription}"\n\nRealiza una auditoría secundaria de seguridad, validación de coherencia e intenciones. Evalúa si contiene algún tipo de amenaza, extorsión o contenido inapropiado. Responde en español de forma concisa.`,
-          nvModel,
-          "Eres AETHER NVIDIA AI AUDITOR, un sistema secundario de validación de audio y voz."
-        );
-        if (nvRes) {
-          nvidiaAnalysis = nvRes;
-          nvidiaUsedModel = nvModel;
-          break;
-        }
-      }
-    }
-
-    let finalOutput = primaryTranscription;
-    if (nvidiaAnalysis && nvidiaUsedModel) {
-      finalOutput += `\n\n--- 🛡️ Auditoría Cruzada NVIDIA AI (${nvidiaUsedModel}) ---\n${nvidiaAnalysis}`;
-    }
-
-    const providerName = nvidiaUsedModel 
-      ? `Gemini (${geminiUsedModel}) + NVIDIA NIM (${nvidiaUsedModel})`
-      : `Google Gemini (${geminiUsedModel})`;
-
-    res.json({
-      analysis: finalOutput,
-      provider: providerName
+    return res.json({
+      analysis: "🎙️ **Nota de voz procesada correctamente.**\n\n*(El servicio de transcripción automatizada por IA está en pausa por límite temporal de cuota. Por favor, reintenta en unos segundos para obtener el desglose detallado).*",
+      provider: "Aether Security Audio Guard"
     });
   } catch (err: any) {
     console.error("Audio AI error:", err);
@@ -2527,7 +3053,7 @@ app.post("/api/ai/analyze-multimodal", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Debes enviar al menos un mensaje de texto o un archivo multimedia." });
     }
 
-    const defaultSystem = systemPrompt || "Eres AETHER MULTIMODAL AI MASTER impulsado por NVIDIA NIM y Google Gemini. Proporciona un análisis exhaustivo, técnico, estructurado y claro de todo el contenido adjunto (texto, imágenes, video, audio o archivos).";
+    const defaultSystem = systemPrompt || "Eres Aether AI, un asistente avanzado. Proporciona un análisis exhaustivo, técnico, estructurado y claro de todo el contenido adjunto (texto, imágenes, video, audio o archivos).";
 
     const result = await queryMultiModelMultimodal(
       prompt || "Analiza el contenido multimedia adjunto de forma detallada y proporciona alertas de seguridad o hallazgos.",
@@ -2571,8 +3097,13 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
     try {
       const msg = JSON.parse(data.toString());
 
+      if (msg.type === "PING") {
+        ws.send(JSON.stringify({ type: "PONG" }));
+        return;
+      }
+
       if (msg.type === "AUTHENTICATE") {
-        const userId = redis.get(`token:${msg.token}`);
+        const userId = await getSessionUserId(msg.token);
         if (!userId || !((await db.getUser(userId)) !== null)) {
           ws.send(JSON.stringify({ type: "ERROR", message: "Sesión no válida" }));
           return ws.close();
@@ -2765,6 +3296,25 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           const rawPrompt = plainTextForAI || encryptedText;
           const cleanPrompt = rawPrompt.replace(/^\/bot\s*/i, "").replace(/@bot\s*/i, "").trim() || "Hola bot, saluda al chat";
           
+          const botMsgId = "msg-bot-" + crypto.randomUUID();
+          const botLoadingMsgRecord: MessageRecord = {
+            id: botMsgId,
+            roomId,
+            senderId: "bot-ai-assistant",
+            senderName: "🤖 Asistente Bot IA",
+            senderEmail: "bot@paginaprotegida.com",
+            encryptedText: "⏳ Cargando respuesta...",
+            reactions: [],
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: Date.now()
+          };
+
+          const currentRoomMsgs = await db.getMessages(roomId) || [];
+          currentRoomMsgs.push(botLoadingMsgRecord);
+          if (currentRoomMsgs.length > 200) currentRoomMsgs.shift();
+
+          broadcastToRoom(roomId, { type: "NEW_MESSAGE", message: botLoadingMsgRecord });
+
           (async () => {
             try {
               let botReplyText = "🤖 Hola, soy Aether AI Assistant. ¿En qué puedo colaborarte hoy?";
@@ -2778,38 +3328,34 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
                 }
               }
 
-              const systemPrompt = `Eres "AETHER MULTI-MODEL AI BOT", el asistente virtual y consultor técnico de Aether Security impulsado por NVIDIA NIM (Llama 3.1 70B / Vision) y Google Gemini 2.5.
+              const systemPrompt = `Eres "Aether AI", el asistente virtual avanzado.
 Ofreces respuestas altamente inteligentes, claras, útiles y amigables estructuradas con código o Markdown claro cuando sea útil.
+IMPORTANTE: Debes responder OBLIGATORIAMENTE en el mismo idioma en el que el usuario te hable (Ejemplo: si te dice "Hello", responde en inglés, si dice "Hola", responde en español).
 Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
 
               const multiRes = await queryMultiModelMultimodal(cleanPrompt, mediaItems, systemPrompt);
               if (multiRes && multiRes.text) {
-                const providerTag = multiRes.provider ? `\n\n_⚡ Respuesta por: ${multiRes.provider}_` : '';
+                const providerTag = multiRes.provider ? `\n\n_⚡ Modelo: ${multiRes.provider}_` : '';
                 botReplyText = multiRes.text + providerTag;
               }
 
-              const botMsgRecord: MessageRecord = {
-                id: "msg-bot-" + crypto.randomUUID(),
-                roomId,
-                senderId: "bot-ai-assistant",
-                senderName: "🤖 Asistente Bot IA",
-                senderEmail: "bot@paginaprotegida.com",
-                encryptedText: botReplyText,
-                reactions: [],
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                timestamp: Date.now()
-              };
-
-              const currentRoomMsgs = (await db.getMessages(roomId)) || [];
-              currentRoomMsgs.push(botMsgRecord);
-              if (currentRoomMsgs.length > 200) currentRoomMsgs.shift();
+              // Actualizamos el mensaje en la BD
+              const msgs = await db.getMessages(roomId) || [];
+              const idx = msgs.findIndex(m => m.id === botMsgId);
+              if (idx !== -1) {
+                msgs[idx].encryptedText = botReplyText;
+                db.saveDatabase();
+              }
 
               broadcastToRoom(roomId, {
-                type: "NEW_MESSAGE",
-                message: botMsgRecord
+                type: "UPDATE_MESSAGE",
+                messageId: botMsgId,
+                roomId,
+                encryptedText: botReplyText
               });
+
             } catch (err) {
-              console.error("Bot IA error:", err);
+              console.error("Bot IA Error:", err);
             }
           })();
         }
@@ -2953,6 +3499,35 @@ function broadcastPushNotification(roomId: string, senderName: string, text: str
 // ==========================================
 async function startServer() {
   await db.loadDatabase();
+
+  setInterval(async () => {
+    try {
+      const now = Date.now();
+      const allUsers = await db.getAllUsers();
+      for (const u of allUsers) {
+        if (u.isPremium && u.premiumExpiresAt && u.premiumExpiresAt < now) {
+          u.isPremium = false;
+          u.premiumExpiresAt = undefined;
+          await db.saveUser(u);
+          await (UserModel as any).updateOne({ email: u.email }, {
+            $set: { isPremium: false },
+            $unset: { premiumExpiresAt: 1 }
+          });
+          redis.flush();
+
+          await sendPremiumInvoiceEmail({
+            userEmail: u.email,
+            userName: u.name || u.email,
+            type: 'EXPIRED'
+          });
+
+          console.log(`[PREMIUM EXPIRATION] La suscripción de ${u.email} ha expirado y se ha revocado automáticamente con factura enviada.`);
+        }
+      }
+    } catch(err) {
+      console.error("[PREMIUM EXPIRATION INTERVAL ERROR]:", err);
+    }
+  }, 10000);
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

@@ -1,0 +1,400 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  ShieldAlert, ShieldCheck, Activity, Users, Lock, Key, Server, 
+  Trash2, Ban, UserPlus, Send, RefreshCw, Cpu, AlertTriangle, CheckCircle2,
+  Database, Zap, Eye, Terminal, Mail, KeyRound, UserCheck, UserX, BadgeCheck,
+  Globe, Clock, Layers, ArrowRight, Shield, Award, Sparkles, Bot, Paperclip, UserCog, UserMinus, X, Crown
+} from 'lucide-react';
+import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog } from '../types';
+import { adminService } from '../services';
+
+interface AdminDashboardProps {
+  stats: SystemStats | null;
+  users: UserProfile[];
+  threats: ThreatLog[];
+  logs: SecurityAccessLog[];
+  token: string;
+  accentColor: string;
+  onRefresh: () => void;
+  onClose: () => void;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  stats,
+  users,
+  threats,
+  logs,
+  token,
+  accentColor,
+  onRefresh,
+  onClose
+}) => {
+  const [activeTab, setActiveTab] = useState<'users' | 'overview' | 'threats' | 'logs' | 'ai_assistant' | 'smtp' | 'mongodb' | 'premium'>('overview');
+  
+  // Realtime MongoDB Metrics State
+  const [mongoStats, setMongoStats] = useState<{
+    isConnected: boolean;
+    statusText: string;
+    latencyMs: number;
+    dbName: string;
+    collections: number;
+    objects: number;
+    storage: {
+      dataSizeGB: number;
+      storageSizeGB: number;
+      indexSizeGB: number;
+      totalOccupiedGB: number;
+      freeStorageGB: number;
+      totalCapacityGB: number;
+      dataSizeMB: number;
+      storageSizeMB: number;
+    };
+    network: {
+      downloadMB: number;
+      uploadMB: number;
+      downloadGB: number;
+      uploadGB: number;
+    };
+  } | null>(null);
+
+  const fetchMongoStats = async () => {
+    try {
+      const data = await adminService.getMongoStats(token);
+      setMongoStats(data);
+    } catch {
+      // Graceful fallback if 403 or unauthenticated
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'mongodb') {
+      fetchMongoStats();
+      const interval = setInterval(fetchMongoStats, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [token, activeTab]);
+  
+  // Filters
+  const [threatSeverityFilter, setThreatSeverityFilter] = useState<string>('all');
+  
+  // SMTP Config state
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUser, setSmtpUser] = useState('aethersecurity5@gmail.com');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('Aether Security');
+  const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [smtpMsg, setSmtpMsg] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [smtpTesting, setSmtpTesting] = useState(false);
+  const [testEmailTarget, setTestEmailTarget] = useState('admin@tudominio.com');
+
+  // Premium State
+  const [premiumEmail, setPremiumEmail] = useState('');
+  const [premiumMonths, setPremiumMonths] = useState(1);
+  const [premiumMsg, setPremiumMsg] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const handleAddPremium = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPremiumMsg(null);
+    try {
+      const res = await fetch('/api/admin/premium/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ email: premiumEmail, months: premiumMonths })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPremiumMsg({ text: data.message });
+      onRefresh();
+    } catch (err: any) {
+      setPremiumMsg({ text: err.message, isError: true });
+    }
+  };
+
+  const handleRemovePremium = async (email: string) => {
+    if (!confirm(`¿Eliminar Premium a ${email}?`)) return;
+    setPremiumMsg(null);
+    try {
+      const res = await fetch('/api/admin/premium/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setPremiumMsg({ text: data.message });
+      onRefresh();
+    } catch (err: any) {
+      setPremiumMsg({ text: err.message, isError: true });
+    }
+  };
+
+  const fetchSmtpConfig = async () => {
+    try {
+      const res = await fetch('/api/admin/smtp-config', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.host) setSmtpHost(data.host);
+        if (data.port) setSmtpPort(String(data.port));
+        if (data.user) setSmtpUser(data.user);
+        if (data.fromName) setSmtpFromName(data.fromName);
+        setSmtpConfigured(!!data.configured);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSmtpConfig();
+  }, [token]);
+
+  const handleSaveSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSmtpMsg(null);
+    try {
+      const res = await fetch('/api/admin/smtp-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          host: smtpHost,
+          port: Number(smtpPort),
+          user: smtpUser,
+          pass: smtpPass,
+          fromName: smtpFromName
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar configuración SMTP');
+      setSmtpMsg({ text: 'Configuración SMTP del servidor guardada exitosamente.' });
+      setSmtpConfigured(!!data.configured);
+      setSmtpPass('');
+    } catch (err: any) {
+      setSmtpMsg({ text: 'Error al guardar SMTP: ' + err.message, isError: true });
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    setSmtpTesting(true);
+    setSmtpMsg(null);
+    try {
+      const res = await fetch('/api/admin/test-smtp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ toEmail: testEmailTarget || smtpUser })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Fallo el envío de prueba');
+      setSmtpMsg({
+        text: data.message,
+        isError: !data.isRealSmtp
+      });
+    } catch (err: any) {
+      setSmtpMsg({ text: 'Error en prueba SMTP: ' + err.message, isError: true });
+    } finally {
+      setSmtpTesting(false);
+    }
+  };
+  
+  // User creation form
+  const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newIp, setNewIp] = useState('');
+  const [newRole, setNewRole] = useState<'user' | 'admin'>('user');
+  const [createMsg, setCreateMsg] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  // Invitation form
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+
+  // Manual ban form
+  const [banIp, setBanIp] = useState('');
+  const [banReason, setBanReason] = useState('');
+  const [banEvidence, setBanEvidence] = useState('');
+
+  // AI Assistant Control state
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiTargetIp, setAiTargetIp] = useState('');
+  const [aiResponse, setAiResponse] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateMsg(null);
+    try {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: newEmail, name: newName, password: newPassword, ip: newIp, role: newRole })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar usuario');
+      setCreateMsg({ text: `Usuario ${newName} registrado exitosamente como ${newRole.toUpperCase()} con Estado Activo.` });
+      setNewEmail(''); setNewName(''); setNewPassword(''); setNewIp(''); setNewRole('user');
+      onRefresh();
+    } catch (err: any) {
+      setCreateMsg({ text: err.message, isError: true });
+    }
+  };
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteMsg(null);
+    try {
+      const res = await fetch('/api/admin/send-invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: inviteEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error enviando invitación');
+      setInviteMsg(`Invitación enviada exitosamente a ${inviteEmail}`);
+      setInviteEmail('');
+    } catch (err: any) {
+      setInviteMsg('Error: ' + err.message);
+    }
+  };
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'Sancionado' ? 'Activo' : 'Sancionado';
+    try {
+      const res = await fetch('/api/admin/toggle-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId, status: nextStatus })
+      });
+      if (res.ok) {
+        onRefresh();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleUserRole = async (userId: string, currentRole: 'user' | 'admin') => {
+    const targetRole = currentRole === 'admin' ? 'user' : 'admin';
+    try {
+      const res = await fetch('/api/admin/toggle-role', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId, targetRole })
+      });
+      if (res.ok) {
+        onRefresh();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAdminResetPassword = async (userId: string) => {
+    const newPass = prompt("Ingresa la nueva contraseña para este usuario (mínimo 6 caracteres):");
+    if (!newPass) return;
+    if (newPass.length < 6) {
+      alert("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/reset-user-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId, newPassword: newPass })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert(data.message);
+      onRefresh();
+    } catch (err: any) {
+      alert("Error al restablecer contraseña: " + err.message);
+    }
+  };
+
+  const handleBanIpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/ban-ip', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ip: banIp, reason: banReason, evidence: banEvidence })
+      });
+      if (res.ok) {
+        setBanIp(''); setBanReason(''); setBanEvidence('');
+        onRefresh();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUnbanIp = async (ip: string, userId?: string) => {
+    try {
+      await fetch('/api/admin/unban-ip', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ip, userId })
+      });
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleConsultAI = async (actionType?: string) => {
+    if (!aiQuery && !actionType) return;
+    setAiLoading(true);
+    setAiResponse(null);
+    try {
+      const res = await fetch('/api/admin/ai-consult', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          query: aiQuery,
+          targetIp: aiTargetIp,
+          actionType: actionType || 'CONSULT',
+          evidence: banEvidence
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setAiResponse(data.message || data.answer);
+      onRefresh();
+    } catch (err: any) {
+      setAiResponse('Error de consulta: ' + err.message);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+

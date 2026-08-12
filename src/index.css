@@ -1,4 +1,35 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --animate-audio-wave: audio-wave 1.2s ease-in-out infinite;
+  --animate-blob: blob 7s infinite;
+  --animate-aurora: aurora 25s linear infinite;
+  
+  @keyframes audio-wave {
+    0%, 100% { height: 4px; opacity: 0.5; }
+    50% { height: 16px; opacity: 1; }
+  }
+  
+  @keyframes blob {
+    0% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+    100% { transform: translate(0px, 0px) scale(1); }
+  }
+
+  @keyframes aurora {
+    0% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
+    33% { transform: translate(15%, -15%) rotate(120deg) scale(1.3); }
+    66% { transform: translate(-15%, 15%) rotate(240deg) scale(1.1); }
+    100% { transform: translate(0%, 0%) rotate(360deg) scale(1); }
+  }
+}
+
+@utility animation-delay-2000 { animation-delay: 2s; }
+@utility animation-delay-4000 { animation-delay: 4s; }
+@utility animation-delay-aurora-1 { animation-delay: -5s; }
+@utility animation-delay-aurora-2 { animation-delay: -15s; }
 
 @layer utilities {
   .scrollbar-none::-webkit-scrollbar {

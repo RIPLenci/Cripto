@@ -14,6 +14,84 @@ export const adminService = {
     });
   },
 
+  async createUser(data: { email: string; password?: string; name: string; ip?: string; role?: string }, token?: string): Promise<any> {
+    return apiRequest('/api/admin/create-user', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify(data),
+    });
+  },
+
+  async editUser(data: { userId: string; name?: string; email?: string; role?: string; status?: string; ip?: string; isPremium?: boolean; premiumExpiresAt?: number }, token?: string): Promise<any> {
+    return apiRequest('/api/admin/edit-user', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteUser(userId: string, token?: string): Promise<any> {
+    return apiRequest('/api/admin/delete-user', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ userId }),
+    });
+  },
+
+  async toggleStatus(userId: string, status: 'Activo' | 'Baneado', token?: string): Promise<any> {
+    return apiRequest('/api/admin/toggle-status', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ userId, status }),
+    });
+  },
+
+  async toggleRole(userId: string, role: 'admin' | 'user', token?: string): Promise<any> {
+    return apiRequest('/api/admin/toggle-role', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ userId, role }),
+    });
+  },
+
+  async resetUserPassword(userId: string, newPassword: string, token?: string): Promise<any> {
+    return apiRequest('/api/admin/reset-user-password', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ userId, newPassword }),
+    });
+  },
+
+  async getRooms(token?: string): Promise<any[]> {
+    return apiRequest('/api/admin/rooms', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  },
+
+  async deleteRoom(roomId: string, token?: string): Promise<any> {
+    return apiRequest('/api/admin/delete-room', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ roomId }),
+    });
+  },
+
+  async banIp(data: { ip: string; reason?: string; severity?: string; evidence?: string; userId?: string }, token?: string): Promise<any> {
+    return apiRequest('/api/admin/ban-ip', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify(data),
+    });
+  },
+
+  async unbanIp(data: { ip?: string; userId?: string }, token?: string): Promise<any> {
+    return apiRequest('/api/admin/unban-ip', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify(data),
+    });
+  },
+
   async getThreats(token?: string): Promise<ThreatLog[]> {
     return apiRequest<ThreatLog[]>('/api/admin/threats', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},

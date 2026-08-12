@@ -8,8 +8,16 @@ interface AudioPlayerProps {
   className?: string;
 }
 
+// Global AudioContext and source map to prevent re-instantiation limits
+const sharedAudioCtx = { current: null as AudioContext | null };
+const sourceNodeMap = new WeakMap<HTMLAudioElement, MediaElementAudioSourceNode>();
+
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, mimeType, filename, className = '' }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const barsRef = useRef<(HTMLSpanElement | null)[]>([]);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -55,11 +63,89 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, mimeType, filenam
     };
   }, [src, mimeType]);
 
+  const initWebAudio = () => {
+    if (!audioRef.current) return;
+    try {
+      if (!sharedAudioCtx.current) {
+        sharedAudioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (sharedAudioCtx.current.state === 'suspended') {
+        sharedAudioCtx.current.resume();
+      }
+
+      if (!analyserRef.current) {
+        analyserRef.current = sharedAudioCtx.current.createAnalyser();
+        analyserRef.current.fftSize = 64; // Generates 32 bins, perfect for 5 bars
+      }
+
+      let source = sourceNodeMap.get(audioRef.current);
+      if (!source) {
+        source = sharedAudioCtx.current.createMediaElementSource(audioRef.current);
+        sourceNodeMap.set(audioRef.current, source);
+      }
+      
+      // Ensure clean connection
+      try { source.disconnect(); } catch (e) {}
+      
+      source.connect(analyserRef.current);
+      analyserRef.current.connect(sharedAudioCtx.current.destination);
+    } catch (e) {
+      console.warn("Web Audio API error (using fallback animation):", e);
+    }
+  };
+
+  const drawVisualizer = () => {
+    if (!analyserRef.current) return;
+    
+    const bufferLength = analyserRef.current.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyserRef.current.getByteFrequencyData(dataArray);
+
+    const numBars = 5;
+    const step = Math.floor((bufferLength / 2) / numBars); // Use lower half of frequencies for speech
+
+    for (let i = 0; i < numBars; i++) {
+      let sum = 0;
+      for (let j = 0; j < step; j++) {
+        sum += dataArray[i * step + j];
+      }
+      const average = sum / step;
+      const height = Math.max(4, (average / 255) * 20); // 4px to 20px
+
+      if (barsRef.current[i]) {
+        barsRef.current[i]!.style.height = `${height}px`;
+        barsRef.current[i]!.style.opacity = `${Math.max(0.4, average / 255)}`;
+      }
+    }
+    
+    animationRef.current = requestAnimationFrame(drawVisualizer);
+  };
+
+  useEffect(() => {
+    if (isPlaying) {
+      drawVisualizer();
+    } else {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      // Reset heights gently
+      for (let i = 0; i < 5; i++) {
+        if (barsRef.current[i]) {
+          barsRef.current[i]!.style.height = '4px';
+          barsRef.current[i]!.style.opacity = '0.5';
+        }
+      }
+    }
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, [isPlaying]);
+
   const togglePlay = () => {
     if (!audioRef.current) return;
+    
     if (isPlaying) {
       audioRef.current.pause();
     } else {
+      initWebAudio();
       audioRef.current.play().catch(err => {
         console.error('Error al reproducir audio:', err);
         setHasError(true);
@@ -116,6 +202,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, mimeType, filenam
         <audio
           ref={audioRef}
           src={objectUrl}
+          crossOrigin="anonymous"
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => {
@@ -165,15 +252,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ src, mimeType, filenam
           </button>
 
           {/* Equalizer Animation / Icon */}
-          <div className="flex items-center gap-0.5 h-4 w-6 shrink-0 justify-center">
+          <div className="flex items-center gap-[2px] h-6 w-8 shrink-0 justify-center">
             {isPlaying ? (
               <>
-                <span className="w-1 bg-[var(--accent)] rounded-full animate-bounce h-3" style={{ animationDelay: '0ms' }} />
-                <span className="w-1 bg-[var(--accent)] rounded-full animate-bounce h-4" style={{ animationDelay: '150ms' }} />
-                <span className="w-1 bg-[var(--accent)] rounded-full animate-bounce h-2" style={{ animationDelay: '300ms' }} />
+                {[0, 1, 2, 3, 4].map(i => (
+                  <span
+                    key={i}
+                    ref={el => { barsRef.current[i] = el; }}
+                    className="w-1 bg-[var(--accent)] rounded-full transition-all duration-75 ease-out"
+                    style={{ height: '4px', opacity: 0.5 }}
+                  />
+                ))}
               </>
             ) : (
-              <Music className="w-3.5 h-3.5 text-slate-400" />
+              <Music className="w-3.5 h-3.5 text-slate-400 self-center" />
             )}
           </div>
 

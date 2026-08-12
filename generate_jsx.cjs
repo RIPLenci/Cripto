@@ -1,0 +1,530 @@
+const fs = require('fs');
+
+const jsx = `
+  // Helper to calculate time ago
+  const timeAgo = (ts: number) => {
+    const diff = Math.floor((Date.now() - ts) / 1000);
+    if (diff < 60) return diff + 's';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+    return Math.floor(diff / 86400) + 'd';
+  };
+
+  const navItems = [
+    { id: 'overview', icon: Activity, label: 'Dashboard' },
+    { id: 'users', icon: Users, label: 'Usuarios' },
+    { id: 'threats', icon: ShieldAlert, label: 'Amenazas' },
+    { id: 'logs', icon: Server, label: 'Logs & Eventos' },
+    { id: 'ai_assistant', icon: Bot, label: 'Aether AI' },
+    { id: 'smtp', icon: Mail, label: 'SMTP Config' },
+    { id: 'mongodb', icon: Database, label: 'Base de Datos' },
+    { id: 'premium', icon: Crown, label: 'Premium' },
+  ];
+
+  return (
+    <div style={{ "--accent": accentColor } as React.CSSProperties} className="fixed inset-0 z-[300] bg-slate-950 text-slate-300 flex font-jakarta overflow-hidden animate-in fade-in duration-300 w-full h-[100dvh]">
+      {/* Background Gradient */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/10 via-slate-950 to-slate-950 pointer-events-none"></div>
+
+      {/* SIDEBAR (Desktop) */}
+      <div className="hidden md:flex flex-col w-64 bg-slate-900/50 backdrop-blur-xl border-r border-slate-800/80 z-10 p-4">
+        <div className="flex items-center gap-3 mb-8 px-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <Cpu className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-white leading-tight">AETHER</h2>
+            <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Admin Nexus</p>
+          </div>
+        </div>
+
+        <nav className="flex-1 space-y-1 overflow-y-auto scrollbar-none">
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={\`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 \${
+                activeTab === item.id 
+                  ? 'bg-indigo-500/10 text-indigo-400 font-bold border border-indigo-500/20 shadow-[inset_0px_0px_20px_rgba(99,102,241,0.05)]' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }\`}
+            >
+              <item.icon className={\`w-4 h-4 \${activeTab === item.id ? 'animate-pulse' : ''}\`} />
+              <span className="text-sm">{item.label}</span>
+              {item.id === 'threats' && threats.length > 0 && (
+                <span className="ml-auto bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                  {threats.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-auto pt-4 border-t border-slate-800/50">
+          <button onClick={onRefresh} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors text-sm">
+            <RefreshCw className="w-4 h-4" /> Actualizar Datos
+          </button>
+          <button onClick={onClose} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors text-sm mt-1">
+            <X className="w-4 h-4" /> Cerrar Panel
+          </button>
+        </div>
+      </div>
+
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 flex flex-col relative z-10 h-full overflow-hidden">
+        
+        {/* MOBILE TOPBAR */}
+        <div className="md:hidden flex items-center justify-between p-4 bg-slate-900/50 backdrop-blur-lg border-b border-slate-800/80 z-20">
+          <div className="flex items-center gap-2">
+            <Cpu className="w-6 h-6 text-indigo-400" />
+            <h2 className="font-bold text-white">AETHER Admin</h2>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg bg-slate-800 text-slate-300">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* MOBILE NAVIGATION TABS (Horizontal Scroll) */}
+        <div className="md:hidden flex overflow-x-auto scrollbar-none p-2 gap-2 bg-slate-900/30 border-b border-slate-800/50 shrink-0">
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={\`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 \${
+                activeTab === item.id ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
+              }\`}
+            >
+              <item.icon className="w-4 h-4" /> {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* TAB CONTENT */}
+        <div className="flex-1 overflow-y-auto scrollbar-none p-4 md:p-8">
+          
+          {/* OVERVIEW TAB */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-2xl md:text-3xl font-black text-white">Dashboard</h3>
+                  <p className="text-slate-400">Estadísticas en tiempo real del sistema</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                {[
+                  { title: 'Usuarios Totales', val: stats?.totalUsers || 0, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                  { title: 'Baneos Activos', val: stats?.bannedUsers || 0, icon: Ban, color: 'text-rose-400', bg: 'bg-rose-500/10' },
+                  { title: 'Salas Activas', val: stats?.totalRooms || 0, icon: Layers, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+                  { title: 'Mensajes Cifrados', val: stats?.totalMessages || 0, icon: Shield, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                ].map((s, i) => (
+                  <div key={i} className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl flex items-start justify-between group hover:border-slate-700 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium text-slate-400 mb-1">{s.title}</p>
+                      <h4 className="text-3xl font-black text-white">{s.val}</h4>
+                    </div>
+                    <div className={\`w-12 h-12 rounded-xl flex items-center justify-center \${s.bg} \${s.color}\`}>
+                      <s.icon className="w-6 h-6" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Security Bento Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                <div className="col-span-1 lg:col-span-2 bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <Activity className="w-5 h-5 text-indigo-400" />
+                    <h4 className="text-lg font-bold text-white">Actividad Reciente del Sistema</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {logs.slice(0, 5).map(log => (
+                      <div key={log.id} className="flex items-center gap-4 p-3 rounded-xl bg-slate-950/50 border border-slate-800/50">
+                        <div className={\`w-2 h-2 rounded-full \${log.suspicious ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.8)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]'}\`}></div>
+                        <div className="flex-1">
+                          <p className="text-sm text-slate-200"><span className="font-mono text-indigo-400 text-xs">{log.ip}</span> - {log.event}</p>
+                        </div>
+                        <span className="text-[10px] text-slate-500">{timeAgo(log.timestamp)}</span>
+                      </div>
+                    ))}
+                    {logs.length === 0 && <p className="text-slate-500 text-sm italic text-center py-4">No hay logs recientes</p>}
+                  </div>
+                </div>
+                
+                <div className="col-span-1 bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+                  <div className="w-24 h-24 rounded-full border-4 border-indigo-500/20 flex items-center justify-center mb-4 relative">
+                    <div className="absolute inset-0 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin"></div>
+                    <ShieldCheck className="w-10 h-10 text-indigo-400" />
+                  </div>
+                  <h4 className="text-xl font-bold text-white mb-2">Sistema Protegido</h4>
+                  <p className="text-sm text-slate-400">AES-256 GCM y Aether AI Activos</p>
+                  <div className="mt-6 w-full bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <p className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Estado de IPS</p>
+                    <p className="text-sm text-emerald-400 font-mono">EN LÍNEA / MONITOREANDO</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* USERS TAB */}
+          {activeTab === 'users' && (
+            <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl font-black text-white">Gestión de Usuarios</h3>
+                  <p className="text-sm text-slate-400">Control total sobre los accesos y roles</p>
+                </div>
+              </div>
+
+              {/* Create User & Invite Bento */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl border border-slate-800/80">
+                  <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><UserPlus className="w-4 h-4 text-emerald-400" /> Crear Usuario</h4>
+                  {createMsg && <div className={\`p-3 mb-4 text-sm rounded-lg border \${createMsg.isError ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}\`}>{createMsg.text}</div>}
+                  <form onSubmit={handleCreateUser} className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="email" placeholder="Correo..." value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                      <input type="text" placeholder="Nombre..." value={newName} onChange={e => setNewName(e.target.value)} required className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="password" placeholder="Contraseña..." value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                      <select value={newRole} onChange={e => setNewRole(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none">
+                        <option value="user">Usuario Estándar</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    </div>
+                    <input type="text" placeholder="IP (Opcional, default: asignada)" value={newIp} onChange={e => setNewIp(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                    <button type="submit" className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-bold py-2 rounded-lg transition-colors text-sm">Crear Directamente</button>
+                  </form>
+                </div>
+                
+                <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl border border-slate-800/80">
+                  <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><Send className="w-4 h-4 text-blue-400" /> Enviar Invitación Mágica</h4>
+                  {inviteMsg && <div className="p-3 mb-4 text-sm rounded-lg border bg-blue-500/10 border-blue-500/20 text-blue-400">{inviteMsg}</div>}
+                  <form onSubmit={handleSendInvite} className="flex gap-2 mt-auto h-full items-start">
+                    <input type="email" placeholder="Correo para invitar..." value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} required className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:border-indigo-500 outline-none" />
+                    <button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white font-bold px-4 py-2.5 rounded-lg transition-colors text-sm flex items-center gap-2">Enviar</button>
+                  </form>
+                  <p className="text-xs text-slate-500 mt-4 leading-relaxed">Envía un enlace único que caduca en 24h. El usuario creará su propia cuenta y contraseña al acceder.</p>
+                </div>
+              </div>
+
+              {/* Users Table */}
+              <div className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800/80 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 bg-slate-950/50">
+                        <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Usuario</th>
+                        <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Rol</th>
+                        <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Estado</th>
+                        <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Creado</th>
+                        <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {users.map(u => (
+                        <tr key={u.id} className="hover:bg-slate-800/20 transition-colors">
+                          <td className="p-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                                {u.name} {u.isPremium && <Crown className="w-3.5 h-3.5 text-amber-400" />}
+                              </span>
+                              <span className="text-xs text-slate-500">{u.email}</span>
+                              <span className="text-[10px] text-indigo-400/70 font-mono mt-0.5">{u.ip}</span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <button onClick={() => handleToggleUserRole(u.id, u.role)} className={\`text-xs font-bold px-2 py-1 rounded-md transition-colors \${u.role === 'admin' ? 'bg-fuchsia-500/10 text-fuchsia-400 hover:bg-fuchsia-500/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}\`}>
+                              {u.role.toUpperCase()}
+                            </button>
+                          </td>
+                          <td className="p-4">
+                            <button onClick={() => handleToggleUserStatus(u.id, u.status)} className={\`text-xs font-bold px-2 py-1 rounded-md transition-colors \${u.status === 'Activo' ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'}\`}>
+                              {u.status}
+                            </button>
+                          </td>
+                          <td className="p-4 text-xs text-slate-400">
+                            {new Date(u.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="p-4 text-right space-x-2">
+                            <button onClick={() => handleAdminResetPassword(u.id)} className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-500 hover:text-white text-slate-400 transition-colors" title="Restablecer Contraseña">
+                              <KeyRound className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleUnbanIp(u.ip, u.id)} className="p-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-white text-slate-400 transition-colors" title="Desbloquear IP/Usuario">
+                              <UserCheck className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PREMIUM TAB (Aurora Theme built-in) */}
+          {activeTab === 'premium' && (
+            <div className="space-y-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
+              
+              <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-3xl z-0">
+                <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-amber-400/20 rounded-full blur-[100px] mix-blend-screen animate-aurora"></div>
+                <div className="absolute top-[10%] right-[-20%] w-[70%] h-[70%] bg-orange-500/15 rounded-full blur-[120px] mix-blend-screen animate-aurora animation-delay-aurora-1"></div>
+              </div>
+
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-500">Aether Premium</h3>
+                  <p className="text-amber-500/80 font-medium">Gestión de Suscripciones VIP</p>
+                </div>
+                <Crown className="w-12 h-12 text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                <div className="bg-slate-900/40 backdrop-blur-xl border border-amber-500/20 p-6 rounded-3xl shadow-[0_0_40px_rgba(245,158,11,0.05)]">
+                  <h4 className="text-lg font-bold text-amber-400 mb-4">Otorgar Premium</h4>
+                  {premiumMsg && <div className={\`p-3 mb-4 text-sm rounded-xl border \${premiumMsg.isError ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}\`}>{premiumMsg.text}</div>}
+                  <form onSubmit={handleAddPremium} className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold text-amber-500/70 uppercase">Correo</label>
+                      <input type="email" value={premiumEmail} onChange={e => setPremiumEmail(e.target.value)} required className="w-full mt-1 bg-slate-950/50 border border-amber-500/20 rounded-xl px-4 py-3 text-white focus:border-amber-400 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-amber-500/70 uppercase">Meses</label>
+                      <input type="number" min="1" value={premiumMonths} onChange={e => setPremiumMonths(Number(e.target.value))} required className="w-full mt-1 bg-slate-950/50 border border-amber-500/20 rounded-xl px-4 py-3 text-white focus:border-amber-400 outline-none" />
+                    </div>
+                    <button type="submit" className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-black shadow-lg shadow-amber-500/20 transition-all">Activar Premium</button>
+                  </form>
+                </div>
+
+                <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 p-6 rounded-3xl h-[400px] flex flex-col">
+                  <h4 className="text-lg font-bold text-white mb-4">Usuarios VIP Activos</h4>
+                  <div className="flex-1 overflow-y-auto space-y-3 scrollbar-none pr-2">
+                    {users.filter(u => u.isPremium).length === 0 && <p className="text-slate-500 italic">No hay suscripciones activas.</p>}
+                    {users.filter(u => u.isPremium).map(u => (
+                      <div key={u.id} className="bg-slate-950/50 border border-slate-800 rounded-xl p-4 flex items-center justify-between group hover:border-amber-500/30 transition-colors">
+                        <div>
+                          <p className="text-sm font-bold text-slate-200 flex items-center gap-2">{u.email} <Crown className="w-3.5 h-3.5 text-amber-400" /></p>
+                          <p className="text-[10px] text-slate-500 mt-1">Exp: {u.premiumExpiresAt ? new Date(u.premiumExpiresAt).toLocaleDateString() : 'N/A'}</p>
+                        </div>
+                        <button onClick={() => handleRemovePremium(u.email)} className="text-xs px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100">Revocar</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MONGODB TAB */}
+          {activeTab === 'mongodb' && mongoStats && (
+            <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center gap-3 mb-6">
+                <Database className="w-8 h-8 text-emerald-400" />
+                <div>
+                  <h3 className="text-2xl font-black text-white">MongoDB Cluster</h3>
+                  <p className="text-emerald-400/80 font-mono text-sm">Latencia: {mongoStats.latencyMs}ms | {mongoStats.statusText}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 p-5 rounded-2xl">
+                  <p className="text-xs text-slate-400 uppercase font-bold mb-1">Colecciones</p>
+                  <h4 className="text-3xl font-black text-white">{mongoStats.collections}</h4>
+                </div>
+                <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 p-5 rounded-2xl">
+                  <p className="text-xs text-slate-400 uppercase font-bold mb-1">Documentos Totales</p>
+                  <h4 className="text-3xl font-black text-white">{mongoStats.objects}</h4>
+                </div>
+                <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 p-5 rounded-2xl">
+                  <p className="text-xs text-slate-400 uppercase font-bold mb-1">Data Real / Almacenamiento</p>
+                  <h4 className="text-2xl font-black text-white">{mongoStats.storage.dataSizeMB.toFixed(2)} MB <span className="text-slate-500 text-lg">/ {mongoStats.storage.storageSizeMB.toFixed(2)} MB</span></h4>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI ASSISTANT TAB */}
+          {activeTab === 'ai_assistant' && (
+            <div className="flex flex-col h-full max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center gap-3 mb-6 shrink-0">
+                <Bot className="w-8 h-8 text-indigo-400" />
+                <div>
+                  <h3 className="text-2xl font-black text-white">Aether AI Overwatch</h3>
+                  <p className="text-indigo-400/80 text-sm">Asistente de Moderación Avanzada (NVIDIA NIM / Gemini)</p>
+                </div>
+              </div>
+
+              <div className="flex-1 bg-slate-900/60 backdrop-blur-md border border-slate-800/80 rounded-2xl flex flex-col overflow-hidden">
+                <div className="flex-1 p-6 overflow-y-auto">
+                  {aiResponse ? (
+                    <div className="bg-indigo-500/10 border border-indigo-500/20 p-5 rounded-2xl">
+                      <p className="text-indigo-200 whitespace-pre-wrap leading-relaxed">{aiResponse}</p>
+                    </div>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-4">
+                      <Bot className="w-16 h-16 opacity-20" />
+                      <p>Envía un prompt a la IA para analizar amenazas o revisar registros.</p>
+                    </div>
+                  )}
+                  {aiLoading && (
+                    <div className="mt-4 flex items-center justify-center gap-2 text-indigo-400">
+                      <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm font-bold animate-pulse">Procesando Consulta Neural...</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="p-4 bg-slate-950 border-t border-slate-800/80">
+                  <div className="flex gap-2">
+                    <input type="text" placeholder="IP (Opcional)" value={aiTargetIp} onChange={e => setAiTargetIp(e.target.value)} className="w-32 bg-slate-900 border border-slate-700 rounded-xl px-3 py-3 text-sm text-white focus:border-indigo-500 outline-none" />
+                    <input type="text" placeholder="Escribe tu consulta para la IA..." value={aiQuery} onChange={e => setAiQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleConsultAI()} className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:border-indigo-500 outline-none" />
+                    <button onClick={() => handleConsultAI()} disabled={aiLoading || (!aiQuery && !aiTargetIp)} className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl transition-colors">
+                      Consultar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* THREATS & LOGS (Simplified for example, identical structure) */}
+          {activeTab === 'threats' && (
+            <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="flex items-center gap-3 mb-6">
+                <ShieldAlert className="w-8 h-8 text-rose-500" />
+                <div>
+                  <h3 className="text-2xl font-black text-white">Registro de Amenazas</h3>
+                  <p className="text-rose-400/80 text-sm">Intentos de intrusión y baneos automáticos</p>
+                </div>
+              </div>
+              <div className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800/80 p-2">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400">
+                        <th className="p-4 font-bold">IP</th>
+                        <th className="p-4 font-bold">Razón</th>
+                        <th className="p-4 font-bold">Severidad</th>
+                        <th className="p-4 font-bold">Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50 text-slate-300">
+                      {threats.map(t => (
+                        <tr key={t.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="p-4 font-mono text-xs text-rose-400">{t.ip}</td>
+                          <td className="p-4">{t.reason}</td>
+                          <td className="p-4"><span className="bg-rose-500/20 text-rose-400 px-2 py-1 rounded-md text-xs font-bold uppercase">{t.severity}</span></td>
+                          <td className="p-4 text-slate-500 text-xs">{new Date(t.timestamp).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* THREATS & LOGS (Simplified for example, identical structure) */}
+          {activeTab === 'logs' && (
+            <div className="space-y-6 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="flex items-center gap-3 mb-6">
+                <Server className="w-8 h-8 text-blue-400" />
+                <div>
+                  <h3 className="text-2xl font-black text-white">Logs de Eventos</h3>
+                  <p className="text-blue-400/80 text-sm">Historial de accesos y configuración</p>
+                </div>
+              </div>
+              <div className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800/80 p-2">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400">
+                        <th className="p-4 font-bold">IP</th>
+                        <th className="p-4 font-bold">Evento</th>
+                        <th className="p-4 font-bold">Estado</th>
+                        <th className="p-4 font-bold">Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50 text-slate-300">
+                      {logs.map(t => (
+                        <tr key={t.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="p-4 font-mono text-xs text-blue-400">{t.ip}</td>
+                          <td className="p-4">{t.event}</td>
+                          <td className="p-4"><span className={\`px-2 py-1 rounded-md text-xs font-bold uppercase \${t.suspicious ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}\`}>{t.suspicious ? 'SOSPECHOSO' : 'OK'}</span></td>
+                          <td className="p-4 text-slate-500 text-xs">{new Date(t.timestamp).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SMTP TAB */}
+          {activeTab === 'smtp' && (
+            <div className="space-y-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center gap-3 mb-6">
+                <Mail className="w-8 h-8 text-fuchsia-400" />
+                <div>
+                  <h3 className="text-2xl font-black text-white">Configuración SMTP</h3>
+                  <p className="text-fuchsia-400/80 text-sm">Servidor de correos para invitaciones y recuperación</p>
+                </div>
+              </div>
+              
+              <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/80 p-6 rounded-2xl">
+                {smtpMsg && <div className={\`p-4 mb-6 rounded-xl border \${smtpMsg.isError ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}\`}>{smtpMsg.text}</div>}
+                
+                <form onSubmit={handleSaveSmtp} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 uppercase">Host SMTP</label>
+                      <input type="text" value={smtpHost} onChange={e => setSmtpHost(e.target.value)} required className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 uppercase">Puerto</label>
+                      <input type="number" value={smtpPort} onChange={e => setSmtpPort(e.target.value)} required className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 uppercase">Usuario / Email</label>
+                      <input type="text" value={smtpUser} onChange={e => setSmtpUser(e.target.value)} required className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-400 uppercase">Contraseña / App Password</label>
+                      <input type="password" value={smtpPass} onChange={e => setSmtpPass(e.target.value)} placeholder="Dejar en blanco si no cambia" className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase">Nombre Remitente</label>
+                    <input type="text" value={smtpFromName} onChange={e => setSmtpFromName(e.target.value)} required className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" />
+                  </div>
+                  <button type="submit" className="w-full py-3 mt-4 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold transition-colors">Guardar Configuración SMTP</button>
+                </form>
+
+                <div className="mt-8 pt-8 border-t border-slate-800/80">
+                  <h4 className="text-sm font-bold text-slate-300 mb-4">Probar Conexión</h4>
+                  <div className="flex gap-3">
+                    <input type="email" placeholder="Correo de destino para prueba..." value={testEmailTarget} onChange={e => setTestEmailTarget(e.target.value)} className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:border-fuchsia-500 outline-none" />
+                    <button onClick={handleTestSmtp} disabled={smtpTesting} className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition-colors disabled:opacity-50">
+                      {smtpTesting ? 'Enviando...' : 'Enviar Prueba'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+};
+`;
+
+fs.writeFileSync('new_jsx.txt', jsx);

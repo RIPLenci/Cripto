@@ -20,6 +20,8 @@ export interface UserProfile {
   isVerified: boolean;
   createdAt: number;
   isBanned?: boolean;
+  isPremium?: boolean;
+  premiumExpiresAt?: number;
   violations?: number;
   infractions?: InfractionLog[];
   banReason?: string;

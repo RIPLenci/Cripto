@@ -5,10 +5,11 @@ import {
   Trash2, Ban, UserPlus, Send, RefreshCw, Cpu, AlertTriangle, CheckCircle2,
   Database, Zap, Eye, Terminal, Mail, KeyRound, UserCheck, UserX, BadgeCheck,
   Globe, Clock, Layers, ArrowRight, Shield, Award, Sparkles, Bot, UserCog, UserMinus, X, Crown,
-  Edit3, Plus, Search, Filter, MessageSquare, Settings, Power, Info, ChevronRight, Copy, Check, SlidersHorizontal, Menu, Flame
+  Edit3, Plus, Search, Filter, MessageSquare, Settings, Power, Info, ChevronRight, Copy, Check, SlidersHorizontal, Menu, Flame, Radar
 } from 'lucide-react';
-import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog } from '../types';
-import { adminService } from '../services';
+import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail } from '../types';
+import { adminService, roomService } from '../services';
+import { SecurityMonitor } from './SecurityMonitor';
 
 interface AdminDashboardProps {
   stats: SystemStats | null;
@@ -31,7 +32,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onRefresh,
   onClose
 }) => {
-  type TabType = 'overview' | 'users' | 'rooms' | 'threats' | 'logs' | 'ai_assistant' | 'smtp' | 'mongodb' | 'premium';
+  type TabType = 'overview' | 'ws_monitor' | 'users' | 'rooms' | 'threats' | 'logs' | 'ai_assistant' | 'smtp' | 'mongodb' | 'premium';
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -235,10 +236,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // IP Ban Form
+  // Banned IPs State
+  const [bannedIpsList, setBannedIpsList] = useState<BannedIpDetail[]>([]);
+  const [loadingBannedIps, setLoadingBannedIps] = useState(false);
+  const [bannedIpSearch, setBannedIpSearch] = useState('');
+  const [bannedSeverityFilter, setBannedSeverityFilter] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
+
+  // IP Ban Form State
   const [banIpInput, setBanIpInput] = useState('');
   const [banReasonInput, setBanReasonInput] = useState('');
+  const [banSeverityInput, setBanSeverityInput] = useState<'low' | 'medium' | 'high' | 'critical'>('high');
   const [banEvidenceInput, setBanEvidenceInput] = useState('');
+
+  const fetchBannedIps = async () => {
+    setLoadingBannedIps(true);
+    try {
+      const data = await adminService.getBannedIps(token);
+      setBannedIpsList(data || []);
+    } catch (err: any) {
+      console.error("Error fetching banned IPs:", err);
+    } finally {
+      setLoadingBannedIps(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'threats') {
+      fetchBannedIps();
+    }
+  }, [activeTab, token]);
 
   const handleManualBanIp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,12 +272,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       const res = await adminService.banIp({
         ip: banIpInput.trim(),
-        reason: banReasonInput || "Sanción manual de Admin",
-        severity: "high",
+        reason: banReasonInput || "Sanción manual de Administrador",
+        severity: banSeverityInput,
         evidence: banEvidenceInput || "Bloqueo manual en Dashboard"
       }, token);
       showToast(res.message || `IP ${banIpInput} baneada`, "success");
       setBanIpInput(''); setBanReasonInput(''); setBanEvidenceInput('');
+      fetchBannedIps();
       onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al banear IP", "error");
@@ -262,6 +289,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       const res = await adminService.unbanIp({ ip }, token);
       showToast(res.message || `IP ${ip} desbaneada`, "success");
+      fetchBannedIps();
       onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al desbanear IP", "error");
@@ -376,6 +404,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Navigation Items
   const navItems: { id: TabType; label: string; icon: any; badge?: number }[] = [
     { id: 'overview', label: 'Métricas & Telemetría', icon: Activity },
+    { id: 'ws_monitor', label: 'Monitor WS (Tiempo Real)', icon: Radar },
     { id: 'users', label: 'Gestión de Usuarios', icon: Users, badge: users.length },
     { id: 'rooms', label: 'Salas & Espacios', icon: MessageSquare, badge: roomsList.length },
     { id: 'threats', label: 'Amenazas & IP Ban', icon: ShieldAlert, badge: threats.filter(t => t.blocked).length },
@@ -387,7 +416,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-slate-950/95 text-slate-100 backdrop-blur-xl overflow-hidden font-sans">
+    <div className="fixed inset-0 z-50 flex bg-slate-950/95 text-slate-100 backdrop-blur-xl overflow-hidden font-sans w-full max-w-full overflow-x-hidden">
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -574,7 +603,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {/* Tab View Container */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
+        <main 
+          style={{ width: '100vw', maxWidth: '100vw', overflowX: 'hidden' }}
+          className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8 space-y-6 w-full max-w-full"
+        >
 
           {/* TAB 1: OVERVIEW & TELEMETRY */}
           {activeTab === 'overview' && (
@@ -713,6 +745,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* TAB: WEBSOCKET REAL-TIME SECURITY MONITOR */}
+          {activeTab === 'ws_monitor' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <SecurityMonitor 
+                token={token} 
+                onNotify={(msg, type) => showToast(msg, type === 'alert' ? 'error' : type)} 
+                accentColor={accentColor}
+              />
             </motion.div>
           )}
 
@@ -981,46 +1028,128 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     No hay salas registradas que coincidan con el filtro.
                   </div>
                 ) : (
-                  filteredRooms.map(r => (
-                    <div key={r.id} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all space-y-4 shadow-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-extrabold text-white text-base">{r.name}</h3>
-                          <div className="text-xs text-indigo-400 font-mono mt-0.5">Código: #{r.code}</div>
-                        </div>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          r.isClosed ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'
-                        }`}>
-                          {r.isClosed ? 'Cerrada' : 'Abierta'}
-                        </span>
-                      </div>
+                  filteredRooms.map(r => {
+                    const mode = r.accessMode || (r.isClosed ? 'closed' : (r.isPrivate ? 'open' : 'global'));
+                    return (
+                      <div key={r.id} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all space-y-4 shadow-lg flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-extrabold text-white text-base">{r.name}</h3>
+                              <div className="text-xs text-indigo-400 font-mono mt-0.5 flex items-center gap-1.5">
+                                <span>Código: #{r.code}</span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(r.code);
+                                    showToast(`Código #${r.code} copiado`, 'info');
+                                  }}
+                                  className="text-slate-500 hover:text-slate-300 transition-colors"
+                                  title="Copiar Código"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1 ${
+                              mode === 'closed' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                              mode === 'open' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                              'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            }`}>
+                              {mode === 'closed' ? '🔒 Cerrada' : mode === 'open' ? '🔑 Abierta' : '🌐 Global'}
+                            </span>
+                          </div>
 
-                      <div className="text-xs text-slate-400 space-y-1">
-                        <div className="flex justify-between">
-                          <span>Creador:</span>
-                          <span className="text-slate-200 font-semibold">{r.createdByName}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Privacidad:</span>
-                          <span className="text-slate-200">{r.isPrivate ? 'Privada (Código)' : 'Pública'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Mensajes Guardados:</span>
-                          <span className="text-cyan-400 font-mono font-bold">{r.messageCount ?? 0}</span>
-                        </div>
-                      </div>
+                          {r.description && (
+                            <p className="text-slate-400 text-xs italic bg-slate-950/40 p-2 rounded-xl border border-slate-800/60">
+                              "{r.description}"
+                            </p>
+                          )}
 
-                      <div className="pt-3 border-t border-slate-800 flex items-center justify-end">
-                        <button 
-                          onClick={() => setDeletingRoom(r)}
-                          className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Eliminar Sala</span>
-                        </button>
+                          <div className="text-xs text-slate-400 space-y-1.5 bg-slate-950/30 p-3 rounded-xl border border-slate-800/40">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Creador:</span>
+                              <span className="text-slate-200 font-semibold">{r.createdByName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Usuarios Activos:</span>
+                              <span className="text-emerald-400 font-bold font-mono">{r.activeUsersCount ?? 0} conectados</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500">Mensajes Guardados:</span>
+                              <span className="text-cyan-400 font-mono font-bold">{r.messageCount ?? 0}</span>
+                            </div>
+                          </div>
+
+                          {/* Quick Mode Changer */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase text-slate-500">Cambiar Modalidad de Sala:</label>
+                            <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await roomService.updateAccessMode(r.id, 'global', token);
+                                    showToast(res.message || "Modo cambiado a Global", "success");
+                                    fetchRooms();
+                                  } catch (err: any) {
+                                    showToast(err.message, "error");
+                                  }
+                                }}
+                                className={`py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                  mode === 'global' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                🌐 Global
+                              </button>
+
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await roomService.updateAccessMode(r.id, 'open', token);
+                                    showToast(res.message || "Modo cambiado a Abierta", "success");
+                                    fetchRooms();
+                                  } catch (err: any) {
+                                    showToast(err.message, "error");
+                                  }
+                                }}
+                                className={`py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                  mode === 'open' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                🔑 Abierta
+                              </button>
+
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await roomService.updateAccessMode(r.id, 'closed', token);
+                                    showToast(res.message || "Modo cambiado a Cerrada", "success");
+                                    fetchRooms();
+                                  } catch (err: any) {
+                                    showToast(err.message, "error");
+                                  }
+                                }}
+                                className={`py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                  mode === 'closed' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                🔒 Cerrada
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-800 flex items-center justify-end">
+                          <button 
+                            onClick={() => setDeletingRoom(r)}
+                            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar Sala</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </motion.div>
@@ -1033,75 +1162,290 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               animate={{ opacity: 1, y: 0 }}
               className="space-y-6"
             >
-              <div className="flex items-center gap-3">
-                <ShieldAlert className="w-7 h-7 text-rose-400" />
-                <div>
-                  <h2 className="text-2xl font-black text-white">Amenazas & Bloqueo de IP</h2>
-                  <p className="text-slate-400 text-xs sm:text-sm">Registro de amenazas de seguridad y sanciones manuales.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                    <ShieldAlert className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                      Firewall & Listado de IPs Bloqueadas
+                    </h2>
+                    <p className="text-slate-400 text-xs sm:text-sm">
+                      Gestión manual y automatizada de sanciones IP, WAF heurístico y lista negra.
+                    </p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={fetchBannedIps}
+                  disabled={loadingBannedIps}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-2 self-start sm:self-auto border border-slate-700/50 transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingBannedIps ? 'animate-spin' : ''}`} />
+                  <span>Actualizar Lista</span>
+                </button>
+              </div>
+
+              {/* Firewall Summary Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                    <Ban className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">IPs Bloqueadas</div>
+                    <div className="text-xl font-black text-white font-mono">{bannedIpsList.length}</div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Amenazas WAF</div>
+                    <div className="text-xl font-black text-white font-mono">{threats.length}</div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Estado Firewall</div>
+                    <div className="text-xs font-black text-emerald-400 flex items-center gap-1.5 mt-0.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Protección Activa
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Manual IP Ban Form */}
-              <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-4">
-                <h3 className="text-xs font-extrabold uppercase text-slate-300 tracking-wider">Bloqueo Manual de Dirección IP</h3>
-                <form onSubmit={handleManualBanIp} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input 
-                    type="text"
-                    placeholder="Dirección IP (ej. 192.168.1.1)..."
-                    value={banIpInput}
-                    onChange={e => setBanIpInput(e.target.value)}
-                    required
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-rose-500 outline-none"
-                  />
-                  <input 
-                    type="text"
-                    placeholder="Razón del bloqueo..."
-                    value={banReasonInput}
-                    onChange={e => setBanReasonInput(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-rose-500 outline-none"
-                  />
-                  <button 
-                    type="submit"
-                    className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Ban className="w-4 h-4" />
-                    <span>Aplicar Ban IP</span>
-                  </button>
+              <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
+                <div className="flex items-center gap-2">
+                  <Ban className="w-4 h-4 text-rose-400" />
+                  <h3 className="text-xs font-extrabold uppercase text-slate-200 tracking-wider">
+                    Bloquear Nueva Dirección IP (Manual)
+                  </h3>
+                </div>
+                <form onSubmit={handleManualBanIp} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Dirección IP</label>
+                    <input 
+                      type="text"
+                      placeholder="Ej. 192.168.1.100..."
+                      value={banIpInput}
+                      onChange={e => setBanIpInput(e.target.value)}
+                      required
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:border-rose-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Nivel de Severidad</label>
+                    <select
+                      value={banSeverityInput}
+                      onChange={e => setBanSeverityInput(e.target.value as any)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-rose-500 outline-none"
+                    >
+                      <option value="low">🟢 Baja</option>
+                      <option value="medium">🟡 Media</option>
+                      <option value="high">🔴 Alta</option>
+                      <option value="critical">🟣 Crítica</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Motivo / Razón</label>
+                    <input 
+                      type="text"
+                      placeholder="Ej. Spam, Intento de ataque..."
+                      value={banReasonInput}
+                      onChange={e => setBanReasonInput(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:border-rose-500 outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <button 
+                      type="submit"
+                      className="w-full py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40"
+                    >
+                      <Ban className="w-4 h-4" />
+                      <span>Sancionar IP</span>
+                    </button>
+                  </div>
                 </form>
               </div>
 
-              {/* Threat Logs List */}
-              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+              {/* Banned IPs List Table */}
+              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl space-y-4 p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-cyan-400" />
+                    <h3 className="text-sm font-black text-white">Listado Activo de IPs Bloqueadas ({bannedIpsList.length})</h3>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative min-w-[200px]">
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                      <input 
+                        type="text"
+                        placeholder="Buscar IP o motivo..."
+                        value={bannedIpSearch}
+                        onChange={e => setBannedIpSearch(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-cyan-500 outline-none"
+                      />
+                    </div>
+
+                    <select
+                      value={bannedSeverityFilter}
+                      onChange={e => setBannedSeverityFilter(e.target.value as any)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:border-cyan-500 outline-none"
+                    >
+                      <option value="all">Todas las Severidades</option>
+                      <option value="critical">Crítica</option>
+                      <option value="high">Alta</option>
+                      <option value="medium">Media</option>
+                      <option value="low">Baja</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-[10px] font-extrabold uppercase text-slate-400 bg-slate-950/50">
+                        <th className="p-3">Dirección IP</th>
+                        <th className="p-3">Severidad</th>
+                        <th className="p-3">Origen / Sancionador</th>
+                        <th className="p-3">Motivo / Razon</th>
+                        <th className="p-3">Fecha de Bloqueo</th>
+                        <th className="p-3 text-right">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 text-xs">
+                      {bannedIpsList.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-500 font-medium">
+                            No hay direcciones IP bloqueadas actualmente en el sistema.
+                          </td>
+                        </tr>
+                      ) : (
+                        bannedIpsList
+                          .filter(b => {
+                            const matchesSearch = !bannedIpSearch || 
+                              b.ip.toLowerCase().includes(bannedIpSearch.toLowerCase()) || 
+                              (b.reason && b.reason.toLowerCase().includes(bannedIpSearch.toLowerCase())) ||
+                              (b.bannedBy && b.bannedBy.toLowerCase().includes(bannedIpSearch.toLowerCase()));
+                            const matchesSeverity = bannedSeverityFilter === 'all' || b.severity === bannedSeverityFilter;
+                            return matchesSearch && matchesSeverity;
+                          })
+                          .map(b => (
+                            <tr key={b.id || b.ip} className="hover:bg-slate-800/30 transition-colors">
+                              <td className="p-3 font-mono font-bold text-rose-300 flex items-center gap-2">
+                                <Ban className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                <span>{b.ip}</span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(b.ip);
+                                    showToast(`IP ${b.ip} copiada al portapapeles`, 'info');
+                                  }}
+                                  className="text-slate-500 hover:text-slate-300 transition-colors p-0.5"
+                                  title="Copiar IP"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </td>
+
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  b.severity === 'critical' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                                  b.severity === 'high' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                                  b.severity === 'medium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                  'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                }`}>
+                                  {b.severity || 'alta'}
+                                </span>
+                              </td>
+
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-medium border border-slate-700/50">
+                                  {b.bannedBy || 'Sistema WAF'}
+                                </span>
+                              </td>
+
+                              <td className="p-3 text-slate-300 text-[11px] max-w-xs truncate" title={b.reason}>
+                                {b.reason || 'Sin razón especificada'}
+                              </td>
+
+                              <td className="p-3 text-slate-400 font-mono text-[11px]">
+                                {new Date(b.timestamp).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
+                              </td>
+
+                              <td className="p-3 text-right">
+                                <button 
+                                  onClick={() => handleUnbanIp(b.ip)}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold transition-all flex items-center gap-1 ml-auto"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Desbloquear IP</span>
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Threat Logs List (WAF Auto Detections) */}
+              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl space-y-3 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-white flex items-center gap-2">
+                      <Radar className="w-4 h-4 text-amber-400" />
+                      Registro de Detecciones WAF ({threats.length})
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-0.5">Alertas automáticas generadas por el motor de detección de amenazas.</p>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse min-w-[650px]">
                     <thead>
-                      <tr className="border-b border-slate-800 text-[11px] font-extrabold uppercase text-slate-400 bg-slate-950/50">
-                        <th className="p-4">Dirección IP</th>
-                        <th className="p-4">Tipo de Amenaza</th>
-                        <th className="p-4">Gravedad</th>
-                        <th className="p-4">Razón / Evidencia</th>
-                        <th className="p-4 text-right">Acción</th>
+                      <tr className="border-b border-slate-800 text-[10px] font-extrabold uppercase text-slate-400 bg-slate-950/50">
+                        <th className="p-3">IP Origen</th>
+                        <th className="p-3">Amenaza</th>
+                        <th className="p-3">Gravedad</th>
+                        <th className="p-3">Detalle / Razón</th>
+                        <th className="p-3 text-right">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 text-xs">
                       {threats.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-slate-500">No se registran amenazas activas.</td>
+                          <td colSpan={5} className="p-6 text-center text-slate-500 font-medium">No se registran amenazas detectadas.</td>
                         </tr>
                       ) : (
                         threats.map(t => (
                           <tr key={t.id} className="hover:bg-slate-800/30 transition-colors">
-                            <td className="p-4 font-mono text-cyan-400">{t.ip}</td>
-                            <td className="p-4 font-semibold text-white">{t.threatType}</td>
-                            <td className="p-4">
+                            <td className="p-3 font-mono text-cyan-400">{t.ip}</td>
+                            <td className="p-3 font-semibold text-white">{t.threatType}</td>
+                            <td className="p-3">
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                                 t.severity === 'high' || t.severity === 'critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
                               }`}>
                                 {t.severity}
                               </span>
                             </td>
-                            <td className="p-4 text-slate-400 text-[11px] max-w-xs truncate">{t.reason}</td>
-                            <td className="p-4 text-right">
+                            <td className="p-3 text-slate-400 text-[11px] max-w-xs truncate">{t.reason}</td>
+                            <td className="p-3 text-right">
                               <button 
                                 onClick={() => handleUnbanIp(t.ip)}
                                 className="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold"

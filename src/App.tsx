@@ -12,7 +12,8 @@ import {
   Palette, Paintbrush, Sparkles, LogIn, UserPlus, ShieldAlert, Cpu,
   Mail, KeyRound, BadgeCheck, Globe, CheckSquare, Layers, Wifi, UserCheck, ArrowRight, Clock,
   Key, Sliders, Volume2, VolumeX, Eye, UserCog, Award, RefreshCw,
-  Mic, MicOff, Square, Bot, Crown
+  Mic, MicOff, Square, Bot, Crown, Radio, Server, Terminal, Plus,
+  Edit3, Search, Copy
 } from 'lucide-react';
 import { CryptoEngine } from './lib/crypto';
 import { authService, roomService, adminService, aiService } from './services';
@@ -36,6 +37,13 @@ export default function App() {
   const [view, setView] = useState<'auth' | 'rooms' | 'chat' | 'premium'>('auth');
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'profile' | 'premium' | 'appearance' | 'security'>('profile');
+  const [editProfileName, setEditProfileName] = useState('');
+  const [editProfileAvatarSeed, setEditProfileAvatarSeed] = useState('');
+  const [changePassCurrent, setChangePassCurrent] = useState('');
+  const [changePassNew, setChangePassNew] = useState('');
+  const [changePassConfirm, setChangePassConfirm] = useState('');
+  const [isChangingPass, setIsChangingPass] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [isAdmin2FAModalOpen, setIsAdmin2FAModalOpen] = useState(false);
   const [isPrivacyScreenActive, setIsPrivacyScreenActive] = useState(false);
@@ -89,12 +97,41 @@ export default function App() {
     currentRoomRef.current = room;
   };
   const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomDescription, setNewRoomDescription] = useState('');
+  const [createRoomMode, setCreateRoomMode] = useState<'open' | 'closed' | 'global'>('global');
+  const [favoriteRoomIds, setFavoriteRoomIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('fav_room_ids') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleFavoriteRoom = (roomId: string) => {
+    setFavoriteRoomIds(prev => {
+      const next = prev.includes(roomId) ? prev.filter(id => id !== roomId) : [...prev, roomId];
+      localStorage.setItem('fav_room_ids', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const [roomFilterMode, setRoomFilterMode] = useState<'all' | 'global' | 'open' | 'closed' | 'favorites'>('all');
+  const [roomSearchQuery, setRoomSearchQuery] = useState('');
+  const [isRoomModeModalOpen, setIsRoomModeModalOpen] = useState(false);
+  const [isRoomUsersModalOpen, setIsRoomUsersModalOpen] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [roomRoomKey, setRoomRoomKey] = useState<CryptoKey | null>(null);
   const roomKeyRef = useRef<CryptoKey | null>(null);
   const setRoomKey = (key: CryptoKey | null) => { setRoomRoomKey(key); roomKeyRef.current = key; };
-  const [roomUsers, setRoomUsers] = useState<Array<{ id: string; name: string; email: string; role?: string }>>([]);
+  const [roomUsers, setRoomUsers] = useState<Array<{ id: string; name: string; email: string; role?: string; avatar?: string; isPremium?: boolean; ip?: string; status?: string }>>([]);
   const [typingUsersMap, setTypingUsersMap] = useState<Record<string, boolean>>({});
+
+  // AI Assistant Drawer State
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [aiDrawerPrompt, setAiDrawerPrompt] = useState('');
+  const [aiDrawerResponse, setAiDrawerResponse] = useState('');
+  const [isAiDrawerLoading, setIsAiDrawerLoading] = useState(false);
 
   // Chat & Real-Time Messages
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -144,21 +181,48 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const currentUserRef = useRef<UserProfile | null>(currentUser);
 
-  const playSoundEffect = useCallback(() => {
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  const playSoundEffect = useCallback((type: 'send' | 'receive' | 'notification' = 'notification') => {
     if (!preferences.soundEnabled) return;
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      const now = ctx.currentTime;
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.2);
+
+      if (type === 'send') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.07);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+        osc.start(now);
+        osc.stop(now + 0.07);
+      } else if (type === 'receive') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.exponentialRampToValueAtTime(987.77, now + 0.12);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, now);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      }
     } catch {
       // Audio fallback
     }
@@ -170,6 +234,69 @@ export default function App() {
     playSoundEffect();
     setTimeout(() => setNotifications((prev) => prev.filter((n) => n.id !== id)), 4500);
   }, [playSoundEffect]);
+
+  // Refresh User Profile from Server
+  const refreshUserProfile = useCallback(async () => {
+    const savedToken = token || localStorage.getItem('aether_token');
+    if (!savedToken) return;
+    try {
+      const data = await authService.getMe(savedToken);
+      if (data.user) {
+        setCurrentUser(data.user);
+      }
+    } catch (err) {
+      console.error("Error refreshing profile:", err);
+    }
+  }, [token]);
+
+  // Profile Sync
+  useEffect(() => {
+    if (isSettingsOpen) {
+      refreshUserProfile();
+    }
+  }, [isSettingsOpen, refreshUserProfile]);
+
+  useEffect(() => {
+    if (currentUser && isSettingsOpen) {
+      setEditProfileName(currentUser.name);
+      setEditProfileAvatarSeed(currentUser.avatar || currentUser.email);
+    }
+  }, [currentUser, isSettingsOpen]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await authService.updateProfile({ name: editProfileName, avatar: editProfileAvatarSeed }, token || undefined);
+      setCurrentUser(res.user);
+      notify("Perfil actualizado correctamente", "success");
+    } catch (err: any) {
+      notify(err.message || "Error al actualizar perfil", "alert");
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (changePassNew !== changePassConfirm) {
+      notify("Las nuevas contraseñas no coinciden", "alert");
+      return;
+    }
+    if (changePassNew.length < 6) {
+      notify("La nueva contraseña debe tener al menos 6 caracteres", "alert");
+      return;
+    }
+    setIsChangingPass(true);
+    try {
+      const res = await authService.changePassword(changePassCurrent, changePassNew, token || undefined);
+      notify(res.message || "Contraseña actualizada exitosamente", "success");
+      setChangePassCurrent('');
+      setChangePassNew('');
+      setChangePassConfirm('');
+    } catch (err: any) {
+      notify(err.message || "Error al cambiar la contraseña", "alert");
+    } finally {
+      setIsChangingPass(false);
+    }
+  };
 
   // Request Push Notification Permissions
   useEffect(() => {
@@ -304,17 +431,39 @@ export default function App() {
           if (data.message.senderId === 'bot-ai-assistant' || data.message.senderId === 'system') {
             text = data.message.encryptedText;
           } else if (roomKeyRef.current) {
-            text = await CryptoEngine.decryptMessage(roomKeyRef.current, data.message.encryptedText);
+            text = await CryptoEngine.decryptMessage(roomKeyRef.current, data.message.encryptedText).catch(() => text);
           }
           const msgObj = { ...data.message, text };
           setMessages((prev) => {
              if (prev.some(m => m.id === msgObj.id)) return prev;
-             const newMsgs = [...prev, msgObj];
+             const optIdx = prev.findIndex(m => m.id.startsWith('opt-') && m.senderId === msgObj.senderId && m.text === msgObj.text);
+             let newMsgs: ChatMessage[];
+             if (optIdx !== -1) {
+               newMsgs = [...prev];
+               newMsgs[optIdx] = msgObj;
+             } else {
+               newMsgs = [...prev, msgObj];
+               if (msgObj.senderId !== currentUserRef.current?.id) {
+                 playSoundEffect('receive');
+               }
+             }
              if (currentRoomRef.current?.id) {
                localStorage.setItem(`room_cache_${currentRoomRef.current.id}`, JSON.stringify(newMsgs.slice(-50)));
              }
              return newMsgs;
           });
+        }
+
+        if (data.type === 'ROOM_MODE_UPDATED') {
+          if (currentRoomRef.current?.id === data.roomId) {
+            updateCurrentRoom({
+              ...currentRoomRef.current,
+              accessMode: data.accessMode,
+              isClosed: data.isClosed,
+              isPrivate: data.isPrivate
+            });
+          }
+          fetchRooms();
         }
 
         if (data.type === 'UPDATE_MESSAGE') {
@@ -542,10 +691,12 @@ export default function App() {
     if (!newRoomName.trim() || !token) return;
 
     try {
-      const data = await roomService.createRoom(newRoomName, false, token);
+      const data = await roomService.createRoom(newRoomName.trim(), createRoomMode, newRoomDescription.trim(), token);
       setNewRoomName('');
+      setNewRoomDescription('');
       fetchRooms();
-      notify('Sala creada exitosamente. Código: ' + data.code, 'success');
+      notify(`Sala ${createRoomMode === 'global' ? '🌐 Global' : createRoomMode === 'open' ? '🔑 Abierta' : '🔒 Cerrada'} creada exitosamente. Código: #${data.code}`, 'success');
+      handleJoinRoom(data);
     } catch (e: any) {
       notify(e.message || 'Error al crear la sala', 'alert');
     }
@@ -814,10 +965,10 @@ export default function App() {
     }
   };
 
-  // Send Message with 2000 character limit validation
+  // Send Message with optimistic instant delivery
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!inputText.trim() && attachments.length === 0) || !currentRoom || !roomRoomKey) return;
+    if ((!inputText.trim() && attachments.length === 0) || !currentRoom || !roomRoomKey || !currentUser) return;
 
     if (inputText.trim().length > 2000) {
       notify('El mensaje escrito excede el límite de 2000 caracteres.', 'alert');
@@ -825,6 +976,35 @@ export default function App() {
     }
 
     const plainText = inputText.trim();
+    const currentAttachments = [...attachments];
+    const currentReplyTo = replyToMsg ? { id: replyToMsg.id, senderName: replyToMsg.senderName, text: (replyToMsg as any).text || 'Adjunto' } : undefined;
+
+    // Reset input states immediately for zero interface delay
+    setInputText('');
+    setAttachments([]);
+    setReplyToMsg(null);
+
+    // Optimistic message creation
+    const tempId = "opt-" + crypto.randomUUID();
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      roomId: currentRoom.id,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderEmail: currentUser.email,
+      encryptedText: plainText,
+      text: plainText,
+      attachments: currentAttachments,
+      replyTo: currentReplyTo,
+      reactions: [],
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: Date.now()
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    playSoundEffect('send');
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+
     const encryptedText = await CryptoEngine.encryptMessage(roomRoomKey, plainText);
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -833,22 +1013,57 @@ export default function App() {
           type: 'SEND_MESSAGE',
           roomId: currentRoom.id,
           encryptedText,
-          attachments,
-          replyTo: replyToMsg ? { id: replyToMsg.id, senderName: replyToMsg.senderName, text: (replyToMsg as any).text || 'Adjunto' } : undefined,
+          attachments: currentAttachments,
+          replyTo: currentReplyTo,
           plainTextForAI: plainText
         })
       );
     }
-
-    setInputText('');
-    setAttachments([]);
-    setReplyToMsg(null);
   };
 
 
   const handleSendZumbido = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'ZUMBIDO' }));
+    }
+  };
+
+  const handleUpdateRoomAccessMode = async (newMode: 'open' | 'closed' | 'global') => {
+    if (!currentRoom || !token) return;
+    try {
+      const res = await roomService.updateAccessMode(currentRoom.id, newMode, token);
+      updateCurrentRoom({
+        ...currentRoom,
+        accessMode: newMode,
+        isClosed: newMode === 'closed',
+        isPrivate: newMode !== 'global'
+      });
+      notify(res.message, 'success');
+      setIsRoomModeModalOpen(false);
+      fetchRooms();
+    } catch (e: any) {
+      notify(e.message || 'Error al actualizar modalidad de sala', 'alert');
+    }
+  };
+
+  const handleAskAiAssistant = async (customPrompt?: string) => {
+    const promptToUse = customPrompt || aiDrawerPrompt;
+    if (!promptToUse.trim()) return;
+
+    setIsAiDrawerLoading(true);
+    if (customPrompt) setAiDrawerPrompt(customPrompt);
+    try {
+      const res = await aiService.analyzeMultimodal(
+        promptToUse,
+        [],
+        `Eres el asistente inteligente oficial de Aether Chat. Responde con concisión y claridad en español.`,
+        token || undefined
+      );
+      setAiDrawerResponse(res.analysis || 'Sin respuesta');
+    } catch (err: any) {
+      setAiDrawerResponse('Error al conectar con la Inteligencia Artificial: ' + (err.message || 'Error de red'));
+    } finally {
+      setIsAiDrawerLoading(false);
     }
   };
 
@@ -926,7 +1141,11 @@ export default function App() {
   };
 
   return (
-    <div style={{ "--accent": preferences.accent } as React.CSSProperties} className={`fixed inset-0 w-full h-[100dvh] flex flex-col ${preferences.theme} ${preferences.fontFam} transition-colors duration-500 bg-slate-950 text-slate-100 overflow-hidden`}>
+    <div 
+      style={{ "--accent": preferences.accent, width: '100vw', maxWidth: '100vw', overflowX: 'hidden' } as React.CSSProperties} 
+      data-theme={preferences.theme}
+      className={`fixed inset-0 w-full max-w-full h-[100dvh] flex flex-col ${preferences.theme} ${preferences.fontFam} aether-app-bg transition-colors duration-500 overflow-hidden overflow-x-hidden`}
+    >
       {/* Privacy Anti-Peek Overlay */}
       {isPrivacyScreenActive && (
         <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center p-6 bg-[#020617]/95 backdrop-blur-3xl text-white text-center">
@@ -971,46 +1190,45 @@ export default function App() {
       )}
 
       {/* Main App Window Container */}
-      <div className="flex flex-col h-full w-full max-w-6xl mx-auto overflow-hidden bg-slate-950 text-slate-100">
+      <div className="flex flex-col h-full w-full max-w-6xl mx-auto overflow-hidden aether-app-bg">
         {/* Navigation Header */}
-        <header className="p-3 sm:p-4 md:p-5 border-b border-slate-800/80 flex items-center justify-between gap-2 bg-slate-900/90 backdrop-blur-md shrink-0 shadow-lg">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <header className="p-2.5 sm:p-4 border-b aether-header flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 shadow-lg w-full max-w-full overflow-hidden">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             <div
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg ring-2 ring-white/10 shrink-0"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg ring-2 ring-white/10 shrink-0"
               style={{ backgroundColor: preferences.accent }}
             >
-              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+              <ShieldCheck className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
-            <div className="min-w-0">
-              <h1 className="font-black text-base sm:text-xl leading-tight text-white flex items-center gap-1.5 truncate">
-                Aether Security <BadgeCheck className="w-4 h-4 text-emerald-400 shrink-0 inline" />
+            <div className="min-w-0 overflow-hidden">
+              <h1 className="font-black text-sm sm:text-lg md:text-xl leading-tight text-white flex items-center gap-1 truncate">
+                Aether <span className="hidden sm:inline">Security</span> <BadgeCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--accent)] shrink-0 inline" style={{ color: preferences.accent }} />
               </h1>
-              <span className="text-[9px] sm:text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1 truncate">
-                <Wifi className="w-3 h-3 shrink-0" /> Conexión Segura
+              <span className="text-[8px] sm:text-[10px] font-mono font-bold flex items-center gap-1 truncate text-emerald-400">
+                <Wifi className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" style={{ color: preferences.accent }} /> <span className="hidden sm:inline">Conexión Segura</span><span className="inline sm:hidden">Cifrado OK</span>
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {currentUser?.role === 'admin' && (
               <button
                 onClick={handleOpenAdminClick}
-                className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 border border-indigo-500/30 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md min-h-[40px]"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-900/80 text-white hover:bg-slate-800 border border-slate-700/60 text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-all active:scale-95 shadow-md min-h-[36px] sm:min-h-[40px]"
               >
-                <Cpu className="w-4 h-4 text-indigo-400 shrink-0" />
-                <span className="hidden sm:inline">Panel Admin</span>
-                <span className="inline sm:hidden text-[11px]">Admin</span>
+                <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={{ color: preferences.accent }} />
+                <span className="hidden sm:inline">Admin</span>
                 {isAdmin2FAVerified ? (
-                  <BadgeCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <BadgeCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" style={{ color: preferences.accent }} />
                 ) : (
-                  <Key className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <Key className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
                 )}
               </button>
             )}
 
             <button
               onClick={() => setView('premium')}
-              className="p-2 sm:p-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors border border-amber-500/30 min-h-[40px] min-w-[40px] flex items-center justify-center"
+              className="p-1.5 sm:p-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors border border-amber-500/30 min-h-[36px] min-w-[36px] sm:min-h-[40px] sm:min-w-[40px] flex items-center justify-center shrink-0"
               title="Aether Premium"
             >
               <Crown className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1018,7 +1236,7 @@ export default function App() {
 
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 sm:p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/50 min-h-[40px] min-w-[40px] flex items-center justify-center"
+              className="p-1.5 sm:p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/50 min-h-[36px] min-w-[36px] sm:min-h-[40px] sm:min-w-[40px] flex items-center justify-center shrink-0"
               title="Personalización"
             >
               <Settings2 className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1027,7 +1245,7 @@ export default function App() {
             {token && (
               <button
                 onClick={handleLogout}
-                className="p-2 sm:p-2.5 rounded-xl bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors border border-rose-500/30 min-h-[40px] min-w-[40px] flex items-center justify-center"
+                className="p-1.5 sm:p-2.5 rounded-xl bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors border border-rose-500/30 min-h-[36px] min-w-[36px] sm:min-h-[40px] sm:min-w-[40px] flex items-center justify-center shrink-0"
                 title="Cerrar Sesión"
               >
                 <Power className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1037,7 +1255,10 @@ export default function App() {
         </header>
 
         {/* Main Body */}
-        <main className="flex-1 relative overflow-hidden flex flex-col min-h-0">
+        <main 
+          style={{ width: '100vw', maxWidth: '100vw', overflowX: 'hidden' }}
+          className="flex-1 relative overflow-hidden overflow-x-hidden flex flex-col min-h-0 w-full max-w-full"
+        >
           {/* VIEW: PREMIUM */}
           {view === 'premium' && (
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 scrollbar-none relative overflow-hidden">
@@ -1487,128 +1708,453 @@ export default function App() {
 
           {/* VIEW 2: ROOMS DASHBOARD */}
           {view === 'rooms' && (
-            <div className="flex-1 p-3 sm:p-6 space-y-5 sm:space-y-6 overflow-y-auto min-h-0">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-xl">
-                <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                    <Layers className="w-5 h-5 sm:w-6 sm:h-6 text-[var(--accent)] shrink-0" /> Salas de Comunicación Protegidas
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                    <span className="flex items-center gap-1">Usuario: <strong className="text-white">{currentUser?.name}</strong> {currentUser?.isPremium && <span title="Usuario Premium"><Crown className="w-3 h-3 text-amber-400" /></span>}</span>
-                    <span>| Rol: <strong className="text-[var(--accent)] font-bold">{currentUser?.role?.toUpperCase()}</strong></span>
-                    <span className="text-emerald-400 font-bold">● {currentUser?.status || 'Activo'}</span>
-                  </p>
-                </div>
-              </div>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex-1 relative overflow-y-auto min-h-0 bg-[#030712] font-sans"
+            >
+              {/* Background ambient effects */}
+              <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-indigo-900/20 to-transparent pointer-events-none"></div>
+              <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[var(--accent)]/10 blur-[120px] rounded-full pointer-events-none"></div>
+              <div className="absolute top-[20%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-              {/* 2 TARJETAS GRANDES: CREAR SALA Y UNIRSE */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                {/* TARJETA 1: CREAR SALA */}
-                <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 hover:border-[var(--accent)]/50 transition-all shadow-2xl flex flex-col justify-between space-y-5 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--accent)]/10 rounded-full blur-2xl group-hover:bg-[var(--accent)]/20 transition-all"></div>
-                  <div className="space-y-3 relative z-10">
-                    <div className="w-12 h-12 rounded-2xl bg-[var(--accent)]/20 text-[var(--accent)] flex items-center justify-center font-bold shadow-inner">
-                      <PlusCircle className="w-7 h-7" />
+              <div className="relative z-10 p-4 sm:p-8 space-y-10 max-w-7xl mx-auto">
+                
+                {/* HUD Header */}
+                <header className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+                  <motion.div 
+                    initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.1 }}
+                    className="flex gap-4 items-center"
+                  >
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+                         <UserCheck className="w-8 h-8 text-[var(--accent)]" />
+                      </div>
+                      {currentUser?.isPremium && (
+                        <div className="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 p-1 rounded-lg border border-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
+                           <Crown className="w-3.5 h-3.5" />
+                        </div>
+                      )}
                     </div>
-                    <h3 className="text-xl sm:text-2xl font-black text-white">Crear Nueva Sala</h3>
-                    <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                      Genera un nuevo canal de comunicación encriptado con código único de 6 dígitos para interactuar de forma segura.
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleCreateRoom} className="space-y-3 relative z-10 pt-2">
-                    <input
-                      type="text"
-                      placeholder="Nombre de la nueva sala..."
-                      value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 px-4 py-3.5 rounded-xl text-sm text-white focus:outline-none focus:border-[var(--accent)] font-medium min-h-[48px]"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full py-3.5 rounded-xl text-white font-extrabold text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 min-h-[48px]"
-                      style={{ backgroundColor: preferences.accent }}
-                    >
-                      <PlusCircle className="w-5 h-5" /> Crear y Entrar a la Sala
-                    </button>
-                  </form>
-                </div>
-
-                {/* TARJETA 2: UNIRSE A SALA */}
-                <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 transition-all shadow-2xl flex flex-col justify-between space-y-5 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
-                  <div className="space-y-3 relative z-10">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold shadow-inner">
-                      <LogIn className="w-7 h-7" />
-                    </div>
-                    <h3 className="text-xl sm:text-2xl font-black text-white">Unirse a una Sala</h3>
-                    <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                      Ingresa el código de acceso de 6 dígitos de una sala existente para conectarte al chat en tiempo real.
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleJoinByCode} className="space-y-3 relative z-10 pt-2">
-                    <input
-                      type="text"
-                      placeholder="Código de 6 dígitos (ej. 123456)"
-                      value={joinCodeInput}
-                      onChange={(e) => setJoinCodeInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 px-4 py-3.5 rounded-xl text-sm font-mono text-center text-[var(--accent)] focus:outline-none focus:border-emerald-500 font-bold min-h-[48px] tracking-wider"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full py-3.5 rounded-xl text-white font-extrabold text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 min-h-[48px]"
-                      style={{ backgroundColor: preferences.accent }}
-                    >
-                      <ArrowRight className="w-5 h-5" /> Unirse a la Sala
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              {/* Active Rooms Grid */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-[var(--accent)]" /> Mis Salas Creadas ({(Array.isArray(rooms) ? rooms : []).length})
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {(Array.isArray(rooms) ? rooms : []).map((r) => (
-                    <div
-                      key={r.id}
-                      onClick={() => handleJoinRoom(r)}
-                      className="p-4 sm:p-5 rounded-2xl bg-slate-900 hover:bg-slate-800/80 border border-slate-800 transition-all cursor-pointer flex justify-between items-center group shadow-xl"
-                    >
-                      <div className="space-y-1 min-w-0 pr-2">
-                        <h4 className="font-bold text-sm sm:text-base text-white group-hover:text-[var(--accent)] transition-colors flex items-center gap-2 truncate">
-                          <MessageSquare className="w-4 h-4 text-[var(--accent)] shrink-0" /> {r.name}
-                        </h4>
-                        <p className="text-[11px] font-mono text-slate-400 truncate">Código: {r.code}</p>
-                        <span className="text-[10px] text-emerald-400 font-bold block">
-                          ● {r.activeUsersCount} conexiones activas
+                    <div>
+                      <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">
+                        {currentUser?.name}
+                      </h2>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-bold bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20">
+                          {currentUser?.role}
+                        </span>
+                        <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          Sistema en línea
                         </span>
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        {currentUser && (r.createdById === currentUser.id || currentUser.role === 'admin') && (
+                    </div>
+                  </motion.div>
+
+                  {/* System HUD Stats */}
+                  <motion.div 
+                    initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.2 }}
+                    className="flex gap-3 overflow-x-auto pb-2 lg:pb-0 hide-scrollbar w-full lg:w-auto"
+                  >
+                    {[
+                      { icon: Activity, label: "Red Global", value: "Estable", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+                      { icon: Shield, label: "Cifrado", value: "AES-256", color: "text-[var(--accent)]", bg: "bg-[var(--accent)]/10", border: "border-[var(--accent)]/20" },
+                      { icon: Server, label: "Nodos Activos", value: (Array.isArray(rooms) ? rooms : []).length.toString(), color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" }
+                    ].map((stat, i) => (
+                      <div key={i} className={`flex items-center gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-md border ${stat.border} min-w-[140px] shrink-0`}>
+                         <div className={`p-2 rounded-xl ${stat.bg} ${stat.color}`}>
+                           <stat.icon className="w-5 h-5" />
+                         </div>
+                         <div>
+                           <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{stat.label}</p>
+                           <p className={`text-sm font-black ${stat.color}`}>{stat.value}</p>
+                         </div>
+                      </div>
+                    ))}
+                  </motion.div>
+                </header>
+
+                {/* Operations Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  
+                  {/* Create Node */}
+                  <motion.div 
+                    initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
+                    className="relative group rounded-[2.5rem] bg-gradient-to-b from-slate-800 to-slate-950 p-[1px] overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent)] to-transparent opacity-0 group-hover:opacity-20 transition-opacity duration-700"></div>
+                    <div className="relative h-full bg-slate-950/90 backdrop-blur-2xl rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden">
+                      {/* Background grid pattern */}
+                      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiMzMzQxNTUiIGZpbGwtb3BhY2l0eT0iMC4yIi8+PC9zdmc+')] opacity-50 mask-image:linear-gradient(to_bottom,white,transparent) [mask-image:linear-gradient(to_bottom,white,transparent)]"></div>
+                      
+                      <div className="relative z-10 mb-10">
+                        <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20 mb-5 shadow-[0_0_30px_rgba(var(--accent-rgb),0.2)]">
+                          <Plus className="w-6 h-6" />
+                        </div>
+                        <h3 className="text-2xl font-black text-white mb-2 tracking-tight">Crear Sala</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed max-w-md">
+                          Crea un entorno privado y cifrado para comunicarte de forma segura.
+                        </p>
+                      </div>
+
+                      <form onSubmit={handleCreateRoom} className="relative z-10 mt-auto space-y-3">
+                        {/* Mode Selector */}
+                        <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
                           <button
-                            onClick={(e) => handleDeleteRoom(e, r.id)}
-                            className="px-2.5 py-2 rounded-xl text-xs font-bold text-white shrink-0 opacity-80 hover:opacity-100 flex items-center gap-1 shadow-md bg-rose-600/80 hover:bg-rose-600 transition-colors"
-                            title="Eliminar Sala"
+                            type="button"
+                            onClick={() => setCreateRoomMode('global')}
+                            className={`flex flex-col items-center justify-center p-2 rounded-lg text-[10px] font-bold transition-all ${
+                              createRoomMode === 'global'
+                                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                            }`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Globe className="w-3.5 h-3.5 mb-1" />
+                            <span>🌐 Global</span>
                           </button>
-                        )}
+
+                          <button
+                            type="button"
+                            onClick={() => setCreateRoomMode('open')}
+                            className={`flex flex-col items-center justify-center p-2 rounded-lg text-[10px] font-bold transition-all ${
+                              createRoomMode === 'open'
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                            }`}
+                          >
+                            <Key className="w-3.5 h-3.5 mb-1" />
+                            <span>🔑 Abierta</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setCreateRoomMode('closed')}
+                            className={`flex flex-col items-center justify-center p-2 rounded-lg text-[10px] font-bold transition-all ${
+                              createRoomMode === 'closed'
+                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                            }`}
+                          >
+                            <Lock className="w-3.5 h-3.5 mb-1" />
+                            <span>🔒 Cerrada</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 italic text-center">
+                          {createRoomMode === 'global' && '🌐 Global: Aparece a todos y cualquier usuario puede comunicarse.'}
+                          {createRoomMode === 'open' && '🔑 Abierta: Solo quienes tengan el código de 6 dígitos pueden ingresar.'}
+                          {createRoomMode === 'closed' && '🔒 Cerrada: Nadie puede entrar a la sala mientras esté bloqueada.'}
+                        </p>
+
+                        <div className="space-y-2">
+                          <div className="relative flex items-center bg-slate-900/80 border border-slate-700/50 rounded-2xl p-1.5 shadow-inner focus-within:border-[var(--accent)]/50 focus-within:shadow-[0_0_20px_rgba(var(--accent-rgb),0.1)] transition-all">
+                            <div className="pl-4 pr-2 text-slate-500">
+                              <Layers className="w-5 h-5" />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Nombre de la sala..."
+                              value={newRoomName}
+                              onChange={(e) => setNewRoomName(e.target.value)}
+                              required
+                              className="flex-1 bg-transparent border-none text-white text-sm font-medium focus:ring-0 placeholder:text-slate-600 outline-none w-full min-w-0"
+                            />
+                          </div>
+
+                          <div className="relative flex items-center bg-slate-900/80 border border-slate-700/50 rounded-2xl p-1.5 shadow-inner">
+                            <div className="pl-4 pr-2 text-slate-500">
+                              <Edit3 className="w-4 h-4" />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Tema o descripción opcional..."
+                              value={newRoomDescription}
+                              onChange={(e) => setNewRoomDescription(e.target.value)}
+                              className="flex-1 bg-transparent border-none text-white text-xs font-medium focus:ring-0 placeholder:text-slate-600 outline-none w-full min-w-0"
+                            />
+                            <button
+                              type="submit"
+                              className="ml-2 px-4 sm:px-6 py-2.5 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-2 shrink-0"
+                              style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #312e81 100%)', boxShadow: '0 10px 20px -10px var(--accent)' }}
+                            >
+                              Crear <ArrowRight className="w-4 h-4 hidden sm:block" />
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                    </div>
+                  </motion.div>
+
+                  {/* Join Node */}
+                  <motion.div 
+                    initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }}
+                    className="relative group rounded-[2.5rem] bg-gradient-to-b from-slate-800 to-slate-950 p-[1px] overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-l from-emerald-500 to-transparent opacity-0 group-hover:opacity-20 transition-opacity duration-700"></div>
+                    <div className="relative h-full bg-slate-950/90 backdrop-blur-2xl rounded-[2.5rem] p-8 flex flex-col justify-between overflow-hidden">
+                      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiMzMzQxNTUiIGZpbGwtb3BhY2l0eT0iMC4yIi8+PC9zdmc+')] opacity-50 mask-image:linear-gradient(to_bottom,white,transparent) [mask-image:linear-gradient(to_bottom,white,transparent)]"></div>
+                      
+                      <div className="relative z-10 mb-10">
+                        <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-5 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                          <LogIn className="w-6 h-6" />
+                        </div>
+                        <h3 className="text-2xl font-black text-white mb-2 tracking-tight">Unirse a Sala</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed max-w-md">
+                          Ingresa el código de acceso (6 dígitos) para conectar con una sala existente y sincronizar la mensajería.
+                        </p>
+                      </div>
+
+                      <form onSubmit={handleJoinByCode} className="relative z-10 mt-auto">
+                        <div className="relative flex items-center bg-slate-900/80 border border-slate-700/50 rounded-2xl p-1.5 shadow-inner focus-within:border-emerald-500/50 focus-within:shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all">
+                          <div className="pl-4 pr-2 text-slate-500">
+                            <Key className="w-5 h-5" />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Código de acceso..."
+                            value={joinCodeInput}
+                            onChange={(e) => setJoinCodeInput(e.target.value)}
+                            className="flex-1 bg-transparent border-none text-emerald-400 text-sm font-bold font-mono tracking-widest focus:ring-0 placeholder:text-slate-600 placeholder:font-sans placeholder:tracking-normal outline-none w-full min-w-0"
+                          />
+                          <button
+                            type="submit"
+                            className="ml-2 px-4 sm:px-6 py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 flex items-center gap-2 bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-[0_10px_20px_-10px_rgba(16,185,129,0.6)] shrink-0"
+                          >
+                            Unirse <ArrowRight className="w-4 h-4 hidden sm:block" />
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </motion.div>
+
+                </div>
+
+                {/* Nodes Grid & Search/Filters */}
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="pt-8 space-y-6">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                      <h3 className="text-2xl font-black text-white flex items-center gap-3">
+                        <Layers className="w-6 h-6 text-slate-400" /> Salas Activas
+                      </h3>
+                      <p className="text-slate-500 text-sm mt-1">Salas disponibles en tu red cifrada.</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                      {/* Search */}
+                      <div className="relative flex-1 md:w-64">
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-3" />
+                        <input
+                          type="text"
+                          placeholder="Buscar sala o código..."
+                          value={roomSearchQuery}
+                          onChange={e => setRoomSearchQuery(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:border-[var(--accent)] outline-none"
+                        />
+                      </div>
+
+                      {/* Filter Tabs */}
+                      <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-[11px] font-bold">
                         <button
-                          className="px-3.5 py-2 rounded-xl text-xs font-bold text-white shrink-0 opacity-90 group-hover:opacity-100 flex items-center gap-1 shadow-md min-h-[38px]"
-                          style={{ backgroundColor: preferences.accent }}
+                          onClick={() => setRoomFilterMode('all')}
+                          className={`px-2.5 py-1 rounded-lg transition-all ${roomFilterMode === 'all' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                         >
-                          <LogIn className="w-3.5 h-3.5" /> Entrar
+                          Todas
+                        </button>
+                        <button
+                          onClick={() => setRoomFilterMode('favorites')}
+                          className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${roomFilterMode === 'favorites' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                          ★ Favoritas
+                        </button>
+                        <button
+                          onClick={() => setRoomFilterMode('global')}
+                          className={`px-2.5 py-1 rounded-lg transition-all ${roomFilterMode === 'global' ? 'bg-sky-500/20 text-sky-300' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                          🌐 Global
+                        </button>
+                        <button
+                          onClick={() => setRoomFilterMode('open')}
+                          className={`px-2.5 py-1 rounded-lg transition-all ${roomFilterMode === 'open' ? 'bg-amber-500/20 text-amber-300' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                          🔑 Abiertas
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <AnimatePresence>
+                      {(() => {
+                        const allRoomsList = Array.isArray(rooms) ? rooms : [];
+                        const filtered = allRoomsList.filter(r => {
+                          const matchesQuery = !roomSearchQuery || 
+                            r.name.toLowerCase().includes(roomSearchQuery.toLowerCase()) || 
+                            r.code.includes(roomSearchQuery) ||
+                            (r.description && r.description.toLowerCase().includes(roomSearchQuery.toLowerCase()));
+                          
+                          const mode = r.accessMode || (r.isClosed ? 'closed' : (r.isPrivate ? 'open' : 'global'));
+                          if (roomFilterMode === 'favorites') return matchesQuery && favoriteRoomIds.includes(r.id);
+                          if (roomFilterMode === 'global') return matchesQuery && mode === 'global';
+                          if (roomFilterMode === 'open') return matchesQuery && mode === 'open';
+                          if (roomFilterMode === 'closed') return matchesQuery && mode === 'closed';
+                          return matchesQuery;
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <motion.div 
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                              className="col-span-full py-20 flex flex-col items-center justify-center border border-dashed border-slate-700/80 rounded-[2rem] bg-slate-900/30 backdrop-blur-sm"
+                            >
+                              <div className="relative">
+                                <div className="absolute inset-0 bg-[var(--accent)]/20 rounded-full blur-2xl animate-pulse"></div>
+                                <Layers className="w-12 h-12 text-slate-600 relative z-10" />
+                              </div>
+                              <h4 className="text-slate-400 font-bold mt-4 text-base">Sin resultados</h4>
+                              <p className="text-slate-500 text-xs mt-1 max-w-md text-center">No se encontraron salas activas con este filtro.</p>
+                            </motion.div>
+                          );
+                        }
+
+                        return filtered.map((r, index) => {
+                          const mode = r.accessMode || (r.isClosed ? 'closed' : (r.isPrivate ? 'open' : 'global'));
+                          const isFav = favoriteRoomIds.includes(r.id);
+
+                          return (
+                            <motion.div
+                              key={r.id}
+                              layoutId={`room-${r.id}`}
+                              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.9, y: -20 }}
+                              transition={{ delay: index * 0.04, duration: 0.25 }}
+                              onClick={() => handleJoinRoom(r)}
+                              className="group cursor-pointer"
+                            >
+                              <div className="relative h-full bg-slate-900 rounded-[2rem] border border-slate-700/60 p-6 flex flex-col justify-between overflow-hidden transition-all duration-300 hover:border-slate-500 hover:shadow-[0_15px_40px_-15px_rgba(0,0,0,0.8)] hover:-translate-y-1">
+                                {/* Accent line left */}
+                                <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-500 ${r.activeUsersCount > 0 ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]' : 'bg-slate-700'}`}></div>
+                                
+                                {/* Inner glow on hover */}
+                                <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+
+                                <div>
+                                  <div className="relative z-10 flex justify-between items-start mb-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[var(--accent)] shadow-inner">
+                                        <Cpu className="w-5 h-5" />
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-1.5 mb-1">
+                                          {mode === 'global' && (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-1">
+                                              <Globe className="w-2.5 h-2.5" /> Global
+                                            </span>
+                                          )}
+                                          {mode === 'open' && (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                                              <Key className="w-2.5 h-2.5" /> Abierta
+                                            </span>
+                                          )}
+                                          {mode === 'closed' && (
+                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                                              <Lock className="w-2.5 h-2.5" /> Cerrada
+                                            </span>
+                                          )}
+                                        </div>
+                                        <h4 className="font-black text-lg text-white truncate max-w-[150px] sm:max-w-[200px] leading-tight">
+                                          {r.name}
+                                        </h4>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          toggleFavoriteRoom(r.id);
+                                        }}
+                                        className={`p-1.5 rounded-lg border transition-all ${
+                                          isFav ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-950/50 text-slate-500 hover:text-amber-300 border-transparent'
+                                        }`}
+                                        title={isFav ? "Quitar de Favoritos" : "Añadir a Favoritos"}
+                                      >
+                                        ★
+                                      </button>
+
+                                      {currentUser && (r.createdById === currentUser.id || currentUser.role === 'admin') && (
+                                        <button
+                                          onPointerDown={(e) => e.stopPropagation()}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleDeleteRoom(e, r.id);
+                                          }}
+                                          className="p-1.5 rounded-lg bg-slate-950/50 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all z-20"
+                                          title="Eliminar Sala"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {r.description && (
+                                    <p className="text-slate-400 text-xs italic mb-4 line-clamp-2 bg-slate-950/40 p-2 rounded-xl border border-slate-800/60">
+                                      "{r.description}"
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div className="relative z-10 mt-auto pt-4 border-t border-slate-800/60 grid grid-cols-2 gap-4">
+                                  <div>
+                                    <p className="text-[9px] uppercase tracking-widest text-slate-500 font-bold mb-1">Código de Acceso</p>
+                                    <div className="flex items-center gap-1.5">
+                                      <KeyRound className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                      <span className="text-xs font-mono font-bold text-slate-300 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                                        {r.code}
+                                      </span>
+                                      <button
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          navigator.clipboard.writeText(r.code);
+                                          notify(`Código #${r.code} copiado`, 'info');
+                                        }}
+                                        className="text-slate-500 hover:text-slate-300 p-0.5"
+                                        title="Copiar Código"
+                                      >
+                                        <Copy className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-[9px] uppercase tracking-widest text-slate-500 font-bold mb-1">Usuarios Activos</p>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <span className="text-xs font-bold text-white">{r.activeUsersCount ?? 0}</span>
+                                      <Users className={`w-3.5 h-3.5 ${r.activeUsersCount > 0 ? 'text-emerald-400' : 'text-slate-600'}`} />
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Decorative line effect */}
+                                <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                              </div>
+                            </motion.div>
+                          );
+                        });
+                      })()}
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* VIEW 3: CHAT VIEW */}
@@ -1624,47 +2170,54 @@ export default function App() {
                     ← <span className="hidden sm:inline">Volver</span>
                   </button>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-xs sm:text-base text-white flex items-center gap-1.5 truncate">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> {currentRoom.name}
-                    </h3>
-                    <span className="text-[10px] font-mono text-[var(--accent)] block truncate">Código: {currentRoom.code}</span>
-                    {currentRoom && currentUser && (currentRoom.createdById === currentUser.id || currentUser.role === 'admin') && (
-                      <div className="inline-flex items-center gap-1.5 ml-2">
-                        <button
-                          onClick={async () => {
-                            const res = await fetch('/api/rooms/toggle-closed', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                              body: JSON.stringify({ roomId: currentRoom.id, isClosed: !currentRoom.isClosed })
-                            });
-                            if (res.ok) {
-                              updateCurrentRoom({ ...currentRoom, isClosed: !currentRoom.isClosed });
-                            }
-                          }}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${currentRoom.isClosed ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}
-                        >
-                          {currentRoom.isClosed ? 'Sala Cerrada' : 'Sala Abierta'}
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteRoom(e, currentRoom.id)}
-                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600/80 hover:bg-rose-600 text-white border border-rose-500/50 transition-colors flex items-center gap-1"
-                          title="Eliminar esta sala"
-                        >
-                          <Trash2 className="w-3 h-3" /> Eliminar
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-xs sm:text-base text-white flex items-center gap-1.5 truncate">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> {currentRoom.name}
+                      </h3>
+
+                      {/* Access Mode Badge */}
+                      <button
+                        onClick={() => {
+                          if (currentUser && (currentRoom.createdById === currentUser.id || currentUser.role === 'admin')) {
+                            setIsRoomModeModalOpen(true);
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border transition-all flex items-center gap-1 ${
+                          (!currentRoom.accessMode || currentRoom.accessMode === 'global')
+                            ? 'bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/30'
+                            : currentRoom.accessMode === 'open'
+                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30'
+                            : 'bg-rose-500/20 text-rose-400 border-rose-500/30 hover:bg-rose-500/30'
+                        }`}
+                        title="Cambiar Modalidad de Sala"
+                      >
+                        {(!currentRoom.accessMode || currentRoom.accessMode === 'global') && <><Globe className="w-3 h-3" /> 🌐 Global</>}
+                        {currentRoom.accessMode === 'open' && <><Key className="w-3 h-3" /> 🔑 Abierta</>}
+                        {(currentRoom.accessMode === 'closed' || currentRoom.isClosed) && <><Lock className="w-3 h-3" /> 🔒 Cerrada</>}
+                      </button>
+                    </div>
+
+                    <span className="text-[10px] font-mono text-[var(--accent)] block truncate">
+                      Código: {currentRoom.code}
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <button
+                    onClick={() => setIsAiAssistantOpen(true)}
+                    className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold text-xs hover:bg-purple-500/30 transition-colors flex items-center gap-1.5 min-h-[38px]"
+                  >
+                    <Bot className="w-4 h-4 text-purple-400 shrink-0 animate-pulse" />
+                    <span className="hidden sm:inline">Asistente IA</span>
+                  </button>
+
+                  <button
                     onClick={handleSendZumbido}
                     className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold text-xs hover:bg-amber-500/30 transition-colors flex items-center gap-1.5 min-h-[38px]"
                   >
                     <BellRing className="w-3.5 h-3.5 shrink-0" />
-                    <span className="hidden sm:inline">Enviar Zumbido</span>
-                    <span className="inline sm:hidden">Zumbido</span>
+                    <span className="hidden sm:inline">Zumbido</span>
                   </button>
                 </div>
               </div>
@@ -1672,10 +2225,13 @@ export default function App() {
               {/* CONNECTED USERS BAR */}
               <div className="px-3 sm:px-4 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shrink-0">
                 <div className="flex items-center gap-2 shrink-0">
-                  <Users className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-bold text-slate-300 whitespace-nowrap">
-                    Conectados ({roomUsers.length}):
-                  </span>
+                  <button
+                    onClick={() => setIsRoomUsersModalOpen(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-emerald-400 hover:border-emerald-500/40 hover:bg-slate-800 transition-all cursor-pointer"
+                  >
+                    <Users className="w-4 h-4 text-emerald-400" />
+                    <span>Ver Usuarios ({roomUsers.length})</span>
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
@@ -1687,11 +2243,15 @@ export default function App() {
                     return (
                       <div
                         key={u.id}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition-all shrink-0 ${
+                        onClick={() => {
+                          setInputText((prev) => `@${u.name} ` + prev);
+                        }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition-all shrink-0 cursor-pointer hover:border-slate-600 ${
                           isUserTyping
                             ? 'bg-slate-900/80 border-[var(--accent)]/60 text-[var(--accent)] animate-pulse shadow-lg'
                             : 'bg-slate-900 border-slate-800 text-slate-300'
                         }`}
+                        title={`Haz clic para mencionar a @${u.name}`}
                       >
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -2248,87 +2808,774 @@ export default function App() {
 
       {/* SETTINGS MODAL */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 p-5 sm:p-6 rounded-2xl sm:rounded-3xl w-full max-w-md space-y-5 text-slate-200 shadow-2xl my-auto max-h-[90dvh] overflow-y-auto">
-            <div className="flex justify-between items-center">
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto w-full max-w-full">
+          <div className="aether-modal border border-slate-800/80 p-5 sm:p-7 rounded-2xl sm:rounded-3xl w-full max-w-lg sm:max-w-xl space-y-5 text-slate-200 shadow-2xl my-auto max-h-[92dvh] overflow-y-auto scrollbar-thin">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <Palette className="w-5 h-5 text-[var(--accent)]" /> Personalización
+                <Settings2 className="w-5 h-5 text-[var(--accent)]" /> Ajustes & Perfil de Usuario
               </h3>
-              <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-800 rounded-full">
+              <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-400 block mb-2">Color Acento</label>
-                <div className="grid grid-cols-6 gap-2">
-                  {['#0ea5e9', '#8b5cf6', '#f43f5e', '#10b981', '#f59e0b', '#d946ef'].map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setPreferences((prev) => ({ ...prev, accent: c }))}
-                      className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-transform ${preferences.accent === c ? 'ring-2 ring-white scale-110 shadow-lg' : ''}`}
-                      style={{ backgroundColor: c }}
-                    >
-                      {preferences.accent === c && <Check className="w-4 h-4 text-white" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-400 block mb-2">Tema Visual</label>
-                <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
-                  <button
-                    onClick={() => setPreferences((prev) => ({ ...prev, theme: 'dark' }))}
-                    className={`py-2 text-xs font-bold rounded-xl transition-all ${preferences.theme === 'dark' ? 'bg-slate-800 text-white shadow' : 'text-slate-400'}`}
-                  >
-                    Dark Slate
-                  </button>
-                  <button
-                    onClick={() => setPreferences((prev) => ({ ...prev, theme: 'oled' }))}
-                    className={`py-2 text-xs font-bold rounded-xl transition-all ${preferences.theme === 'oled' ? 'bg-slate-800 text-white shadow' : 'text-slate-400'}`}
-                  >
-                    OLED Black
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-slate-800">
-                <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                    <Volume2 className="w-4 h-4 text-[var(--accent)]" /> Sonidos de Notificación
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={preferences.soundEnabled}
-                    onChange={(e) => setPreferences((prev) => ({ ...prev, soundEnabled: e.target.checked }))}
-                    className="w-4 h-4 accent-[var(--accent)] rounded"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
-                  <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                    <EyeOff className="w-4 h-4 text-[var(--accent)]" /> Pantalla Anti-Miradas
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={preferences.privacyBlur}
-                    onChange={(e) => setPreferences((prev) => ({ ...prev, privacyBlur: e.target.checked }))}
-                    className="w-4 h-4 accent-[var(--accent)] rounded"
-                  />
-                </label>
-              </div>
+            {/* Navigation Tabs */}
+            <div className="grid grid-cols-4 bg-slate-950 p-1 rounded-2xl border border-slate-800 gap-1 text-center">
+              <button
+                onClick={() => setSettingsTab('profile')}
+                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'profile' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+              >
+                <UserCheck className="w-3.5 h-3.5 shrink-0" /> Perfil
+              </button>
+              <button
+                onClick={() => setSettingsTab('premium')}
+                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'premium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow' : 'text-amber-400/70 hover:text-amber-300'}`}
+              >
+                <Crown className="w-3.5 h-3.5 shrink-0 text-amber-400" /> VIP
+              </button>
+              <button
+                onClick={() => setSettingsTab('appearance')}
+                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'appearance' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+              >
+                <Palette className="w-3.5 h-3.5 shrink-0" /> Diseño
+              </button>
+              <button
+                onClick={() => setSettingsTab('security')}
+                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'security' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+              >
+                <Lock className="w-3.5 h-3.5 shrink-0" /> Seguridad
+              </button>
             </div>
+
+            {/* TAB: PROFILE */}
+            {settingsTab === 'profile' && (
+              <form onSubmit={handleUpdateProfile} className="space-y-5">
+                {/* Avatar Section */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-center gap-4">
+                  <div className="relative group shrink-0">
+                    <img 
+                      src={`https://api.dicebear.com/7.x/identicon/svg?seed=${editProfileAvatarSeed}&backgroundColor=transparent`} 
+                      alt="Avatar" 
+                      className="w-20 h-20 rounded-2xl bg-slate-900 border-2 border-slate-700 shadow-lg group-hover:border-[var(--accent)] transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditProfileAvatarSeed(Math.random().toString(36).substring(7))}
+                      className="absolute -bottom-2 -right-2 p-2 bg-slate-800 border border-slate-700 text-white rounded-xl shadow-lg hover:scale-110 transition-transform"
+                      title="Generar avatar aleatorio"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 w-full text-center sm:text-left">
+                    <label className="text-xs font-bold text-slate-400 block">Personalizar Semilla del Avatar</label>
+                    <input
+                      type="text"
+                      value={editProfileAvatarSeed}
+                      onChange={(e) => setEditProfileAvatarSeed(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-[var(--accent)]"
+                      placeholder="Semilla o avatar..."
+                    />
+                    <p className="text-[10px] text-slate-500">Avatar único generado algorítmicamente vía Identicon.</p>
+                  </div>
+                </div>
+
+                {/* Edit Username */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 block">Nombre de Usuario</label>
+                  <input
+                    type="text"
+                    value={editProfileName}
+                    onChange={(e) => setEditProfileName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors shadow-inner"
+                    placeholder="Tu nombre..."
+                    required
+                  />
+                </div>
+
+                {/* Account Details Summary */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-indigo-400" /> Correo Gmail
+                    </p>
+                    <p className="text-xs font-bold text-slate-200 truncate">{currentUser?.email || 'N/A'}</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                        <Key className="w-3.5 h-3.5 text-cyan-400" /> ID de Cuenta
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (currentUser?.id) {
+                            navigator.clipboard.writeText(currentUser.id);
+                            notify("ID de cuenta copiado al portapapeles", "success");
+                          }
+                        }}
+                        className="text-[10px] font-bold text-[var(--accent)] hover:underline"
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                    <p className="text-xs font-mono font-bold text-slate-300 truncate">{currentUser?.id || 'N/A'}</p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-emerald-400" /> Rol en la Red
+                    </p>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold ${currentUser?.role === 'admin' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
+                      {currentUser?.role === 'admin' ? 'Administrador Master' : 'Usuario Verificado'}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                      <Network className="w-3.5 h-3.5 text-amber-400" /> IP Registrada
+                    </p>
+                    <p className="text-xs font-mono font-bold text-slate-300">{currentUser?.ip || '0.0.0.0'}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-transform min-h-[44px]"
+                  style={{ backgroundColor: preferences.accent }}
+                >
+                  Guardar Perfil
+                </button>
+              </form>
+            )}
+
+            {/* TAB: PREMIUM STATUS & VIP BENEFITS */}
+            {settingsTab === 'premium' && (
+              <div className="space-y-5">
+                {currentUser?.isPremium ? (
+                  <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-amber-500/20 via-yellow-500/10 to-amber-950/40 border-2 border-amber-500/50 shadow-xl shadow-amber-500/10 space-y-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest flex items-center gap-1">
+                      <Crown className="w-3 h-3" /> VIP
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-lg">
+                        <Crown className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-black text-amber-300 uppercase tracking-wide">Suscripción Aether VIP Activa</h4>
+                        <p className="text-xs text-amber-200/80 font-medium">Cuentas con cobertura y privilegios prémium activos.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-black/40 rounded-xl border border-amber-500/20 space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-amber-200/70 font-semibold">Vencimiento:</span>
+                        <span className="font-mono font-bold text-amber-300">
+                          {currentUser.premiumExpiresAt ? new Date(currentUser.premiumExpiresAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Indefinido'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-amber-200/70 font-semibold">Tiempo Restante:</span>
+                        <span className="font-bold text-emerald-400">
+                          {currentUser.premiumExpiresAt ? `${Math.max(0, Math.ceil((currentUser.premiumExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)))} días restantes` : 'Permanente'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">Beneficios VIP Desbloqueados:</p>
+                      <ul className="grid grid-cols-1 gap-2 text-xs text-slate-200">
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Paleta de Colores Exclusiva VIP Desbloqueada
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> IA Aether Max de Respuesta Ultrarrápida
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Transferencia de Archivos hasta 200 MB
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Inmunidad Anti-Baneo Leve Automática
+                        </li>
+                      </ul>
+                    </div>
+
+                    <button
+                      onClick={() => alert("Tu membresía VIP está totalmente activa. Si necesitas extender la duración o cambiar tu plan, contacta al administrador del sistema (" + currentUser.email + ").")}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg active:scale-95"
+                    >
+                      Contactar Administrador / Consultar Plan
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">Suscripción Báltica / Plan Básico</h4>
+                        <p className="text-xs text-slate-400">Acceso a funciones esenciales de seguridad.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-2">
+                      <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                        <Crown className="w-4 h-4" /> ¿Deseas desbloquear Aether Premium?
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        Obtén colores de diseño exclusivos, respuesta IA de máxima velocidad y soporte prioritario por solo <span className="font-bold text-amber-400">$9.99/mes</span>.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIsSettingsOpen(false); setView('premium'); }}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <Crown className="w-4 h-4" /> Ver Planes y Obtener Premium
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: APPEARANCE & COLORS */}
+            {settingsTab === 'appearance' && (
+              <div className="space-y-5">
+                {/* Standard Palette */}
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-2">Paleta Estándar (Acceso Libre)</label>
+                  <div className="grid grid-cols-6 gap-2">
+                    {[
+                      { hex: '#0ea5e9', name: 'Cian Aether' },
+                      { hex: '#10b981', name: 'Esmeralda' },
+                      { hex: '#f43f5e', name: 'Rosa Carmín' },
+                      { hex: '#8b5cf6', name: 'Violeta' },
+                      { hex: '#f59e0b', name: 'Ámbar' },
+                      { hex: '#d946ef', name: 'Fucsia' }
+                    ].map((c) => (
+                      <button
+                        key={c.hex}
+                        type="button"
+                        onClick={() => setPreferences((prev) => ({ ...prev, accent: c.hex }))}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${preferences.accent === c.hex ? 'ring-2 ring-white scale-110 shadow-lg' : 'hover:scale-105'}`}
+                        style={{ backgroundColor: c.hex }}
+                        title={c.name}
+                      >
+                        {preferences.accent === c.hex && <Check className="w-4 h-4 text-white drop-shadow" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* VIP Palette */}
+                <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <Crown className="w-4 h-4 text-amber-400" /> Paleta Exclusiva VIP (Aether Premium)
+                    </label>
+                    {!currentUser?.isPremium && (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
+                        Bloqueado
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 pt-1">
+                    {[
+                      { hex: '#06b6d4', name: 'Cian Cyber VIP' },
+                      { hex: '#eab308', name: 'Oro Imperial VIP' },
+                      { hex: '#ef4444', name: 'Rojo Escarlata VIP' },
+                      { hex: '#a855f7', name: 'Púrpura Galáctico VIP' },
+                      { hex: '#84cc16', name: 'Lima Ácido VIP' },
+                      { hex: '#f97316', name: 'Naranja Supernova VIP' },
+                      { hex: '#64748b', name: 'Plata Metalizado VIP' },
+                      { hex: '#ec4899', name: 'Rosa Plasma VIP' }
+                    ].map((c) => (
+                      <button
+                        key={c.hex}
+                        type="button"
+                        onClick={() => {
+                          if (!currentUser?.isPremium) {
+                            notify("👑 El color " + c.name + " es exclusivo para usuarios Aether Premium.", "alert");
+                          } else {
+                            setPreferences((prev) => ({ ...prev, accent: c.hex }));
+                            notify("Color VIP " + c.name + " aplicado correctamente", "success");
+                          }
+                        }}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all relative ${preferences.accent === c.hex ? 'ring-2 ring-amber-400 scale-110 shadow-lg' : 'hover:scale-105'}`}
+                        style={{ backgroundColor: c.hex }}
+                        title={c.name}
+                      >
+                        {preferences.accent === c.hex && <Check className="w-4 h-4 text-white drop-shadow" />}
+                        {!currentUser?.isPremium && (
+                          <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center backdrop-blur-[1px]">
+                            <Lock className="w-3 h-3 text-amber-300" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Themes */}
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-2">Tema Visual</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setPreferences((prev) => ({ ...prev, theme: 'dark' }))}
+                      className={`py-2 text-xs font-bold rounded-xl transition-all ${preferences.theme === 'dark' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+                    >
+                      Dark Slate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreferences((prev) => ({ ...prev, theme: 'oled' }))}
+                      className={`py-2 text-xs font-bold rounded-xl transition-all ${preferences.theme === 'oled' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+                    >
+                      OLED Black
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!currentUser?.isPremium) {
+                          notify("👑 El tema Midnight Navy es exclusivo para usuarios Premium.", "alert");
+                        } else {
+                          setPreferences((prev) => ({ ...prev, theme: 'midnight' }));
+                        }
+                      }}
+                      className={`py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${preferences.theme === 'midnight' ? 'bg-slate-800 text-amber-300 shadow' : 'text-amber-400/80 hover:text-amber-300'}`}
+                    >
+                      {!currentUser?.isPremium && <Lock className="w-3 h-3" />} Midnight
+                    </button>
+                  </div>
+                </div>
+
+                {/* Toggles */}
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                      <Volume2 className="w-4 h-4 text-[var(--accent)]" /> Sonidos de Notificación
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={preferences.soundEnabled}
+                      onChange={(e) => setPreferences((prev) => ({ ...prev, soundEnabled: e.target.checked }))}
+                      className="w-4 h-4 accent-[var(--accent)] rounded"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                      <EyeOff className="w-4 h-4 text-[var(--accent)]" /> Pantalla Anti-Miradas (Privacy Blur)
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={preferences.privacyBlur}
+                      onChange={(e) => setPreferences((prev) => ({ ...prev, privacyBlur: e.target.checked }))}
+                      className="w-4 h-4 accent-[var(--accent)] rounded"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: SECURITY & PASSWORD */}
+            {settingsTab === 'security' && (
+              <div className="space-y-5">
+                <form onSubmit={handleChangePassword} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <KeyRound className="w-4 h-4 text-[var(--accent)]" /> Cambiar Contraseña
+                  </h4>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400">Contraseña Actual</label>
+                    <input
+                      type="password"
+                      value={changePassCurrent}
+                      onChange={(e) => setChangePassCurrent(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400">Nueva Contraseña</label>
+                    <input
+                      type="password"
+                      value={changePassNew}
+                      onChange={(e) => setChangePassNew(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                      placeholder="Mínimo 6 caracteres..."
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400">Confirmar Nueva Contraseña</label>
+                    <input
+                      type="password"
+                      value={changePassConfirm}
+                      onChange={(e) => setChangePassConfirm(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                      placeholder="Repite la nueva contraseña..."
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isChangingPass}
+                    className="w-full py-2.5 mt-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors disabled:opacity-50"
+                  >
+                    {isChangingPass ? 'Actualizando...' : 'Actualizar Contraseña'}
+                  </button>
+                </form>
+
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Sesión Cifrada y Token Activo
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Tu sesión está protegida con cifrado AES-256 en cliente y servidor. Si sospechas de acceso no autorizado, puedes cerrar la sesión para invalidar el token actual.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem('aether_token');
+                      setToken(null);
+                      setCurrentUser(null);
+                      setView('auth');
+                      setIsSettingsOpen(false);
+                      notify("Sesión cerrada correctamente", "info");
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 font-bold text-xs transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Power className="w-3.5 h-3.5" /> Cerrar Sesión Segura
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={() => setIsSettingsOpen(false)}
-              className="w-full py-3.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-transform min-h-[44px]"
+              className="w-full py-3 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-transform min-h-[44px]"
               style={{ backgroundColor: preferences.accent }}
             >
-              Guardar Preferencias
+              Cerrar Ajustes
             </button>
           </div>
+        </div>
+      )}
+
+      {/* MODAL 1: CHANGE ROOM ACCESS MODE */}
+      {isRoomModeModalOpen && currentRoom && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl p-6 space-y-5 shadow-2xl relative"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[var(--accent)]">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Modalidad de Sala</h3>
+                  <p className="text-xs text-slate-400">{currentRoom.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsRoomModeModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Selecciona quién puede visualizar y conectarse a esta sala en tiempo real:
+            </p>
+
+            <div className="space-y-3">
+              {/* Option 1: Global */}
+              <button
+                onClick={() => handleUpdateRoomAccessMode('global')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-start gap-3.5 ${
+                  (!currentRoom.accessMode || currentRoom.accessMode === 'global')
+                    ? 'bg-sky-500/10 border-sky-500/50 shadow-[0_0_20px_rgba(14,165,233,0.15)]'
+                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="p-2.5 rounded-xl bg-sky-500/20 text-sky-400 shrink-0 mt-0.5">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white">🌐 Sala Global</h4>
+                    {(!currentRoom.accessMode || currentRoom.accessMode === 'global') && (
+                      <span className="text-[10px] bg-sky-500/30 text-sky-300 font-bold px-2 py-0.5 rounded-full">Activo</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                    Aparece públicamente en el panel. Cualquier usuario registrado en Aether puede ingresar y chatear.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Open */}
+              <button
+                onClick={() => handleUpdateRoomAccessMode('open')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-start gap-3.5 ${
+                  currentRoom.accessMode === 'open'
+                    ? 'bg-amber-500/10 border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)]'
+                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white">🔑 Sala Abierta (por Código)</h4>
+                    {currentRoom.accessMode === 'open' && (
+                      <span className="text-[10px] bg-amber-500/30 text-amber-300 font-bold px-2 py-0.5 rounded-full">Activo</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                    Protegida. Solo tú (creador) y quienes conozcan el código numérico de 6 dígitos ({currentRoom.code}) podrán entrar.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3: Closed */}
+              <button
+                onClick={() => handleUpdateRoomAccessMode('closed')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-start gap-3.5 ${
+                  (currentRoom.accessMode === 'closed' || currentRoom.isClosed)
+                    ? 'bg-rose-500/10 border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.15)]'
+                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 shrink-0 mt-0.5">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white">🔒 Sala Cerrada</h4>
+                    {(currentRoom.accessMode === 'closed' || currentRoom.isClosed) && (
+                      <span className="text-[10px] bg-rose-500/30 text-rose-300 font-bold px-2 py-0.5 rounded-full">Activo</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                    Totalmente bloqueada. Ningún nuevo usuario podrá ingresar hasta que el creador la cambie a Abierta o Global.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL 2: INTERACTIVE ROOM USERS LIST */}
+      {isRoomUsersModalOpen && currentRoom && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-6 space-y-5 shadow-2xl relative max-h-[85vh] flex flex-col"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-emerald-400">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Usuarios Conectados</h3>
+                  <p className="text-xs text-slate-400">{roomUsers.length} miembros activos en {currentRoom.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsRoomUsersModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Filter Input */}
+            <div className="relative shrink-0">
+              <input
+                type="text"
+                placeholder="Buscar usuario por nombre o correo..."
+                value={userSearchTerm}
+                onChange={(e) => setUserSearchTerm(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+
+            {/* User Directory List */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-none">
+              {roomUsers
+                .filter(u => u.name.toLowerCase().includes(userSearchTerm.toLowerCase()) || u.email.toLowerCase().includes(userSearchTerm.toLowerCase()))
+                .map((u) => {
+                  const isCreator = currentRoom.createdById === u.id;
+                  const isAdmin = u.role === 'admin';
+                  return (
+                    <div
+                      key={u.id}
+                      className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="relative shrink-0">
+                          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white text-sm">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt={u.name} className="w-full h-full rounded-xl object-cover" />
+                            ) : (
+                              u.name.substring(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full"></span>
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="text-xs font-bold text-white truncate">{u.name}</h4>
+                            {isCreator && (
+                              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] px-1.5 py-0.2 rounded font-extrabold flex items-center gap-0.5">
+                                <Crown className="w-2.5 h-2.5" /> Creador
+                              </span>
+                            )}
+                            {isAdmin && (
+                              <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[9px] px-1.5 py-0.2 rounded font-extrabold">
+                                Admin
+                              </span>
+                            )}
+                            {u.isPremium && (
+                              <span className="bg-amber-400 text-slate-950 text-[9px] px-1.5 py-0.2 rounded font-extrabold">
+                                VIP
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 truncate mt-0.5">{u.email}</p>
+                        </div>
+                      </div>
+
+                      {/* User Actions */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => {
+                            setInputText((prev) => `@${u.name} ` + prev);
+                            setIsRoomUsersModalOpen(false);
+                            notify(`Mención a @${u.name} lista en el chat`, 'info');
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold transition-all flex items-center gap-1"
+                          title="Mencionar en el chat"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" /> Mencionar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL 3: AI ASSISTANT SIDE DRAWER */}
+      {isAiAssistantOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-end">
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            className="w-full max-w-md bg-slate-900 border-l border-slate-800 h-full p-6 flex flex-col justify-between shadow-2xl relative"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    <Bot className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Asistente IA Aether</h3>
+                    <p className="text-xs text-slate-400">Inteligencia Artificial Multimodal Integrada</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsAiAssistantOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Quick AI Prompts */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleAskAiAssistant('Resume en 3 puntos clave la conversación actual de la sala.')}
+                  className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-purple-500/40 text-left text-xs text-slate-300 font-medium transition-all"
+                >
+                  ✨ Resumir Conversación
+                </button>
+                <button
+                  onClick={() => handleAskAiAssistant('Dame 3 sugerencias de respuesta inteligentes para responder amablemente en este chat.')}
+                  className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-purple-500/40 text-left text-xs text-slate-300 font-medium transition-all"
+                >
+                  💡 Sugerir Respuesta
+                </button>
+              </div>
+
+              {/* Response Display Box */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 min-h-[180px] max-h-[350px] overflow-y-auto space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-purple-400">
+                  <Sparkles className="w-4 h-4" /> Respuesta de la IA:
+                </div>
+                {isAiDrawerLoading ? (
+                  <div className="flex items-center justify-center py-8 gap-2 text-xs text-purple-300 font-bold animate-pulse">
+                    <Activity className="w-4 h-4 animate-spin" /> Procesando con Aether AI...
+                  </div>
+                ) : aiDrawerResponse ? (
+                  <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    {aiDrawerResponse}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic py-4">
+                    Escribe una pregunta o haz clic en los botones superiores para interactuar con la IA.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* AI Prompt Form */}
+            <div className="space-y-2 pt-4 border-t border-slate-800">
+              <div className="relative flex items-center bg-slate-950 border border-slate-800 rounded-2xl p-1.5">
+                <input
+                  type="text"
+                  placeholder="Pregunta algo a la IA..."
+                  value={aiDrawerPrompt}
+                  onChange={(e) => setAiDrawerPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAskAiAssistant();
+                  }}
+                  className="flex-1 bg-transparent px-3 text-xs text-white placeholder-slate-500 outline-none"
+                />
+                <button
+                  onClick={() => handleAskAiAssistant()}
+                  disabled={isAiDrawerLoading}
+                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all disabled:opacity-50"
+                >
+                  Consultar
+                </button>
+              </div>
+            </div>
+          </motion.div>
         </div>
       )}
     </div>

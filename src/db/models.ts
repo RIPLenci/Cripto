@@ -20,6 +20,7 @@ export interface IUser extends Document {
   isBanned: boolean;
   isPremium?: boolean;
   premiumExpiresAt?: number;
+  avatar?: string;
   banReason?: string;
   banSeverity?: 'low' | 'medium' | 'high' | 'critical';
   banEvidence?: string;
@@ -39,6 +40,7 @@ const UserSchema = new Schema<IUser>({
   isBanned: { type: Boolean, required: true, default: false },
   isPremium: { type: Boolean, default: false },
   premiumExpiresAt: { type: Number },
+  avatar: { type: String },
   banReason: { type: String },
   banSeverity: { type: String },
   banEvidence: { type: String },
@@ -60,6 +62,8 @@ export interface IRoom extends Document {
   createdAt: number;
   isPrivate: boolean;
   isClosed: boolean;
+  accessMode?: 'open' | 'closed' | 'global';
+  description?: string;
 }
 const RoomSchema = new Schema<IRoom>({
   id: { type: String, required: true, unique: true, index: true },
@@ -69,7 +73,9 @@ const RoomSchema = new Schema<IRoom>({
   createdByName: { type: String, required: true },
   createdAt: { type: Number, required: true, default: Date.now },
   isPrivate: { type: Boolean, required: true, default: false },
-  isClosed: { type: Boolean, required: true, default: false }
+  isClosed: { type: Boolean, required: true, default: false },
+  accessMode: { type: String, default: 'global' },
+  description: { type: String, default: '' }
 });
 RoomSchema.index({ id: 1 });
 RoomSchema.index({ code: 1 });
@@ -148,10 +154,16 @@ export const SecurityLogModel = mongoose.models.SecurityLog || mongoose.model<IS
 // Banned IPs
 export interface IBannedIP extends Document {
   ip: string;
+  reason?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  bannedBy?: string;
   timestamp: number;
 }
 const BannedIPSchema = new Schema<IBannedIP>({
   ip: { type: String, required: true, unique: true, index: true },
+  reason: { type: String, default: 'Sanción de Firewall' },
+  severity: { type: String, default: 'high' },
+  bannedBy: { type: String, default: 'Sistema WAF' },
   timestamp: { type: Number, required: true, default: Date.now }
 });
 BannedIPSchema.plugin(fieldEncryption, { fields: ['ip'], secret });

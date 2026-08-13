@@ -58,6 +58,22 @@ export const authService = {
     });
   },
 
+  async updateProfile(data: { name?: string; avatar?: string }, token?: string): Promise<{ message: string; user: UserProfile }> {
+    return apiRequest<{ message: string; user: UserProfile }>('/api/users/profile', {
+      method: 'PUT',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify(data),
+    });
+  },
+
+  async changePassword(currentPassword: string, newPassword: string, token?: string): Promise<{ message: string }> {
+    return apiRequest('/api/users/change-password', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
   async adminRequest2FACode(token?: string): Promise<{ message: string }> {
     return apiRequest('/api/admin/request-2fa-code', {
       method: 'POST',

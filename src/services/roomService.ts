@@ -8,11 +8,19 @@ export const roomService = {
     });
   },
 
-  async createRoom(name: string, isPrivate: boolean = false, token?: string): Promise<ChatRoom> {
+  async createRoom(name: string, accessMode: 'open' | 'closed' | 'global' = 'global', description?: string, token?: string): Promise<ChatRoom> {
     return apiRequest<ChatRoom>('/api/rooms/create', {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: JSON.stringify({ name, isPrivate }),
+      body: JSON.stringify({ name, accessMode, isPrivate: accessMode !== 'global', description }),
+    });
+  },
+
+  async updateAccessMode(roomId: string, accessMode: 'open' | 'closed' | 'global', token?: string): Promise<{ message: string; room: ChatRoom }> {
+    return apiRequest<{ message: string; room: ChatRoom }>('/api/rooms/update-access-mode', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ roomId, accessMode }),
     });
   },
 

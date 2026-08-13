@@ -179,6 +179,100 @@ async function sendRealEmail(toEmail: string, subject: string, htmlContent: stri
   }
 }
 
+
+// ==========================================
+// AETHER EMAIL TEMPLATE SYSTEM (100% REDESIGNED)
+// ==========================================
+function buildAetherEmail(title: string, subtitle: string, contentHtml: string, colorHex: string = '#0ea5e9') {
+  const timestamp = new Date().toUTCString();
+  return `
+  <!DOCTYPE html>
+  <html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aether Security Network</title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #030712; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; -webkit-font-smoothing: antialiased;">
+    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #030712; padding: 40px 12px;">
+      <tr>
+        <td align="center">
+          <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 580px; background: #0b0f19; border-radius: 20px; border: 1px solid #1e293b; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 35px -5px ${colorHex}25;">
+            
+            <!-- Top Gradient Bar -->
+            <tr>
+              <td style="height: 4px; background: linear-gradient(90deg, ${colorHex}, #3b82f6, ${colorHex});"></td>
+            </tr>
+
+            <!-- Header Header -->
+            <tr>
+              <td style="padding: 28px 32px 20px 32px; border-bottom: 1px solid #1e293b; background: linear-gradient(180deg, ${colorHex}12 0%, transparent 100%);">
+                <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="left" style="vertical-align: middle;">
+                      <table border="0" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="vertical-align: middle;">
+                            <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #0f172a, #020617); border: 1px solid ${colorHex}60; border-radius: 12px; text-align: center; line-height: 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                              <span style="font-size: 18px;">🛡️</span>
+                            </div>
+                          </td>
+                          <td style="padding-left: 12px; vertical-align: middle;">
+                            <div style="color: #ffffff; font-size: 17px; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; font-family: -apple-system, sans-serif;">AETHER SECURITY</div>
+                            <div style="color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: 1px;">DEFENSE & NETWORK PROTOCOL</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                    <td align="right" style="vertical-align: middle;">
+                      <span style="display: inline-block; background-color: ${colorHex}18; border: 1px solid ${colorHex}45; color: ${colorHex}; padding: 6px 12px; border-radius: 9999px; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase;">
+                        ${subtitle}
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Main Body Content -->
+            <tr>
+              <td style="padding: 32px;">
+                <h1 style="margin: 0 0 20px 0; font-size: 21px; color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; line-height: 1.35;">
+                  ${title}
+                </h1>
+                ${contentHtml}
+              </td>
+            </tr>
+
+            <!-- Footer Section -->
+            <tr>
+              <td style="padding: 24px 32px; background-color: #060913; border-top: 1px solid #1e293b;">
+                <!-- Security Badge -->
+                <div style="background-color: #0d1322; border: 1px solid #1e293b; border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; text-align: center;">
+                  <div style="font-size: 10px; font-weight: 800; color: ${colorHex}; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 4px;">
+                    🔒 TRANSMISIÓN CIFRADA CON PROTOCOLO SHA-256
+                  </div>
+                  <div style="font-size: 10px; color: #64748b; font-family: monospace;">
+                    TIMESTAMP: ${timestamp} • AETHER SECURITY MESH
+                  </div>
+                </div>
+
+                <p style="margin: 0; font-size: 11px; color: #475569; line-height: 1.6; text-align: center;">
+                  Este correo fue emitido de forma automática por los servidores centrales de <strong>Aether Security Network</strong>.<br>
+                  Por razones de ciberseguridad e integridad de datos, no responda directamente a este mensaje.<br>
+                  © 2026 Aether Security Infrastructure Inc. Todos los derechos reservados.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>`;
+}
+
 async function sendPremiumInvoiceEmail(params: {
   userEmail: string;
   userName?: string;
@@ -192,7 +286,6 @@ async function sendPremiumInvoiceEmail(params: {
 
   const displayName = userName || userEmail.split('@')[0];
   const invoiceNum = `FACT-AETHER-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
-  const issueDate = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const expiresDateStr = expiresAt ? new Date(expiresAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A';
 
   const m = months && months > 0 ? months : 1;
@@ -212,135 +305,87 @@ async function sendPremiumInvoiceEmail(params: {
   if (type === 'ACTIVATED') {
     subject = `📄 Factura Electrónica y Activación Premium #${invoiceNum}`;
     badgeColor = '#10b981';
-    badgeText = 'PAGADO & ACTIVADO';
-    statusBanner = '¡Gracias por adquirir tu membresía Aether Security Pro! Tu servicio ha sido activado exitosamente con acceso total a Inteligencias Artificiales y encriptación VIP.';
+    badgeText = 'MEMBRESÍA ACTIVA';
+    statusBanner = '¡Confirmación de suscripción Aether Security Pro! Su servicio ha sido habilitado con cifrado prioritario y acceso ilimitado a motores de IA.';
   } else if (type === 'EXTENDED') {
-    subject = `📄 Factura Electrónica y Extensión Premium #${invoiceNum}`;
+    subject = `📄 Factura Electrónica y Renovación Premium #${invoiceNum}`;
     badgeColor = '#06b6d4';
-    badgeText = 'SUSCRIPCIÓN AMPLIADA';
-    statusBanner = 'Tu período de suscripción Premium ha sido renovado y ampliado exitosamente en Aether Security.';
+    badgeText = 'SUSCRIPCIÓN RENOVADA';
+    statusBanner = 'El período de cobertura de su suscripción Aether Security Pro ha sido renovado y extendido exitosamente.';
   } else if (type === 'REMOVED') {
-    subject = `📄 Comprobante de Cancelación Premium #${invoiceNum}`;
+    subject = `📄 Comprobante de Cancelación de Servicio #${invoiceNum}`;
     badgeColor = '#ef4444';
-    badgeText = 'CANCELADO / REMOVIDO';
-    statusBanner = `Tu suscripción Premium ha sido revocada/removida por el administrador. ${reason ? 'Razón indicada: ' + reason : ''}`;
+    badgeText = 'CANCELADO';
+    statusBanner = `La suscripción Premium de su cuenta ha sido revocada por el departamento de administración. ${reason ? 'Motivo: ' + reason : ''}`;
   } else if (type === 'EXPIRED') {
-    subject = `📄 Notificación de Vencimiento de Suscripción Premium #${invoiceNum}`;
+    subject = `📄 Notificación de Finalización de Cobertura #${invoiceNum}`;
     badgeColor = '#f59e0b';
-    badgeText = 'EXPIRADO AUTOMÁTICAMENTE';
-    statusBanner = 'El tiempo de vigencia de tu plan Aether Premium ha finalizado. Tu cuenta ha vuelto automáticamente al plan estándar básico.';
+    badgeText = 'EXPIRADO';
+    statusBanner = 'El período de vigencia de su membresía Premium ha concluido. Su cuenta ha retornado al nivel de acceso estándar.';
   }
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; background: #090d16; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1e293b; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
-      <div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); padding: 30px 25px; border-bottom: 1px solid #334155;">
-        <table style="width: 100%;">
-          <tr>
-            <td>
-              <h1 style="margin: 0; color: #38bdf8; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">AETHER SECURITY CORE</h1>
-              <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 11px; font-family: monospace;">SISTEMA CENTRAL DE FACTURACIÓN Y SUSCRIPCIONES</p>
-            </td>
-            <td style="text-align: right;">
-              <span style="display: inline-block; padding: 6px 14px; background: ${badgeColor}22; color: ${badgeColor}; border: 1px solid ${badgeColor}44; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase;">
-                ${badgeText}
-              </span>
-            </td>
-          </tr>
-        </table>
-      </div>
-
-      <div style="padding: 25px;">
-        <div style="background: #111827; border: 1px solid #1f2937; padding: 16px; border-radius: 12px; margin-bottom: 25px; font-size: 13px; color: #cbd5e1; line-height: 1.5;">
-          ${statusBanner}
-        </div>
-
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 13px; color: #cbd5e1;">
-          <tr>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">N° DE FACTURA:</td>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; font-family: monospace; font-weight: bold; color: #38bdf8;">${invoiceNum}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">FECHA DE EMISIÓN:</td>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc;">${issueDate}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">CLIENTE / CORREO:</td>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc;">${displayName} (${userEmail})</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-weight: bold;">FECHA DE VENCIMIENTO:</td>
-            <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; text-align: right; font-weight: bold; color: #fbbf24;">${expiresDateStr}</td>
-          </tr>
-        </table>
-
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 13px;">
-          <thead>
-            <tr style="background: #1e293b; color: #94a3b8; text-transform: uppercase; font-size: 11px; font-weight: bold;">
-              <th style="padding: 10px; text-align: left; border-radius: 8px 0 0 8px;">Concepto / Cargo</th>
-              <th style="padding: 10px; text-align: center;">Cant.</th>
-              <th style="padding: 10px; text-align: right; border-radius: 0 8px 8px 0;">Monto</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; color: #f8fafc; font-weight: bold;">
-                Membresía Plan Aether Premium ($9.99 USD / mes)
-                <div style="font-size: 11px; font-weight: normal; color: #64748b; margin-top: 2px;">Acceso ilimitado a IA avanzadas, salas cibernéticas y cifrado VIP</div>
-              </td>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8; font-weight: bold;">
-                ${isPaid ? `${m} mes${m > 1 ? 'es' : ''}` : '-'}
-              </td>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: bold; font-family: monospace;">
-                $${basePlanPrice.toFixed(2)} USD
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; color: #cbd5e1;">
-                Cargo por Servicio y Procesamiento de Transacción
-              </td>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8;">1</td>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: bold; font-family: monospace;">
-                +$${processingFee.toFixed(2)} USD
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; color: #cbd5e1;">
-                Impuesto al Valor Agregado (IVA 16%)
-              </td>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8;">16%</td>
-              <td style="padding: 12px 10px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: bold; font-family: monospace;">
-                +$${iva.toFixed(2)} USD
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div style="background: #0f172a; border: 1px solid #334155; padding: 18px; border-radius: 12px; margin-bottom: 25px;">
-          <table style="width: 100%; font-size: 13px;">
-            <tr>
-              <td style="color: #94a3b8;">Subtotal:</td>
-              <td style="text-align: right; font-family: monospace; color: #f8fafc;">$${subtotal.toFixed(2)} USD</td>
-            </tr>
-            <tr>
-              <td style="color: #94a3b8;">IVA (16%):</td>
-              <td style="text-align: right; font-family: monospace; color: #f8fafc;">+$${iva.toFixed(2)} USD</td>
-            </tr>
-            <tr style="border-top: 1px solid #334155;">
-              <td style="padding-top: 10px; color: #38bdf8; font-weight: bold; font-size: 15px;">TOTAL FINAL COBRADO:</td>
-              <td style="padding-top: 10px; text-align: right; color: #38bdf8; font-size: 22px; font-weight: 800; font-family: monospace;">$${grandTotal.toFixed(2)} USD</td>
-            </tr>
-          </table>
-        </div>
-
-        <div style="text-align: center; color: #64748b; font-size: 11px; line-height: 1.6; border-top: 1px solid #1e293b; padding-top: 20px;">
-          Factura Electrónica y Comprobante Oficial emitido por el Servidor SMTP de Aether Security.<br/>
-          Si requieres soporte o consultas sobre tu facturación, comunícate con la administración.
-        </div>
-      </div>
+  const content = `
+    <div style="background-color: ${badgeColor}15; border: 1px solid ${badgeColor}40; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
+      <p style="margin: 0; color: ${badgeColor}; font-size: 13px; font-weight: 700; line-height: 1.5;">${statusBanner}</p>
     </div>
-  `;
 
-  await sendRealEmail(userEmail, subject, html, `${subject} - Total: $${grandTotal.toFixed(2)} USD - Cliente: ${displayName} (${userEmail}) - Vencimiento: ${expiresDateStr}`);
+    <div style="background-color: #0f172a; border-radius: 14px; border: 1px solid #1e293b; overflow: hidden; margin-bottom: 24px;">
+      <table width="100%" border="0" cellpadding="0" cellspacing="0">
+        <thead>
+          <tr style="background-color: #070c18;">
+            <th style="padding: 14px 16px; text-align: left; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Concepto / Servicio</th>
+            <th style="padding: 14px 16px; text-align: center; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Período</th>
+            <th style="padding: 14px 16px; text-align: right; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; color: #f8fafc; font-weight: 600; font-size: 13px;">
+              Membresía Aether Security Pro
+              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Cifrado VIP & Motores IA Dedicados</div>
+            </td>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8; font-size: 13px;">${isPaid ? `${m} mes${m > 1 ? 'es' : ''}` : '-'}</td>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: 700; font-family: monospace; font-size: 13px;">${basePlanPrice.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; color: #cbd5e1; font-size: 13px;">Tasa de Procesamiento de Red</td>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8; font-size: 13px;">1</td>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; text-align: right; color: #cbd5e1; font-weight: 600; font-family: monospace; font-size: 13px;">+${processingFee.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 14px 16px; color: #cbd5e1; font-size: 13px;">Impuesto IVA (16%)</td>
+            <td style="padding: 14px 16px; text-align: center; color: #94a3b8; font-size: 13px;">16%</td>
+            <td style="padding: 14px 16px; text-align: right; color: #cbd5e1; font-weight: 600; font-family: monospace; font-size: 13px;">+${iva.toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="background: linear-gradient(135deg, #0d1527, #070a12); border: 1px solid #1e293b; padding: 20px; border-radius: 14px; margin-bottom: 20px;">
+      <table width="100%" border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color: #64748b; font-size: 12px; padding-bottom: 6px;">Subtotal Neto</td>
+          <td align="right" style="color: #cbd5e1; font-family: monospace; font-size: 13px; padding-bottom: 6px;">${subtotal.toFixed(2)} USD</td>
+        </tr>
+        <tr>
+          <td style="color: #64748b; font-size: 12px; padding-bottom: 12px; border-bottom: 1px solid #1e293b;">Impuestos Aplicables</td>
+          <td align="right" style="color: #cbd5e1; font-family: monospace; font-size: 13px; padding-bottom: 12px; border-bottom: 1px solid #1e293b;">+${iva.toFixed(2)} USD</td>
+        </tr>
+        <tr>
+          <td style="color: ${badgeColor}; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; padding-top: 12px;">Total Facturado</td>
+          <td align="right" style="color: ${badgeColor}; font-size: 22px; font-weight: 900; font-family: monospace; padding-top: 12px;">${grandTotal.toFixed(2)}</td>
+        </tr>
+      </table>
+    </div>
+
+    <p style="margin: 0; font-size: 11px; color: #64748b; text-align: center; line-height: 1.5;">
+      Comprobante fiscal digital expedido para <strong>${displayName}</strong> (${userEmail}).<br>
+      Vigencia hasta: <strong>${expiresDateStr}</strong>.
+    </p>
+  `;
+  const html = buildAetherEmail(`Comprobante Electrónico #${invoiceNum}`, badgeText, content, badgeColor);
+
+  await sendRealEmail(userEmail, subject, html, `${subject} - Total: ${grandTotal.toFixed(2)} USD - Cliente: ${displayName} (${userEmail}) - Vencimiento: ${expiresDateStr}`);
 }
 
 // Server-side Gemini AI setup
@@ -662,6 +707,7 @@ interface UserRecord {
   isBanned: boolean;
   isPremium?: boolean;
   premiumExpiresAt?: number;
+  avatar?: string;
   violations?: number;
   infractions?: InfractionRecord[];
   banReason?: string;
@@ -679,6 +725,7 @@ interface RoomRecord {
   createdAt: number;
   isPrivate: boolean;
   isClosed?: boolean;
+  accessMode?: 'open' | 'closed' | 'global';
 }
 
 interface MessageRecord {
@@ -929,16 +976,30 @@ class DatabaseStore {
     await (MessageModel as any).create(msg);
   }
 
-  async addBannedIP(ip: string) {
-    await (BannedIPModel as any).findOneAndUpdate({ ip: ip } as any, { ip, timestamp: Date.now() }, { upsert: true });
+  async addBannedIP(ip: string, reason?: string, severity?: string, bannedBy?: string) {
+    const cleanIp = ip ? ip.trim() : '';
+    if (!cleanIp) return;
+    await (BannedIPModel as any).findOneAndUpdate(
+      { ip: cleanIp } as any,
+      {
+        ip: cleanIp,
+        reason: reason || 'Bloqueo WAF / Sanción Manual',
+        severity: severity || 'high',
+        bannedBy: bannedBy || 'Admin / WAF',
+        timestamp: Date.now()
+      },
+      { upsert: true }
+    );
   }
 
   async removeBannedIP(ip: string) {
-    await (BannedIPModel as any).deleteOne({ ip: ip } as any);
+    const cleanIp = ip ? ip.trim() : '';
+    await (BannedIPModel as any).deleteOne({ ip: cleanIp } as any);
   }
 
   async isIpBanned(ip: string) {
-    return (await (BannedIPModel as any).findOne({ ip: ip } as any)) !== null;
+    const cleanIp = ip ? ip.trim() : '';
+    return (await (BannedIPModel as any).findOne({ ip: cleanIp } as any)) !== null;
   }
 
   async addThreat(threat: any) {
@@ -978,6 +1039,21 @@ class DatabaseStore {
   async getAllBannedIPs() {
     const ips = await (BannedIPModel as any).find();
     return ips.map((i: any) => this.decryptStringIfNeeded(i.ip));
+  }
+
+  async getAllBannedIPsDetails() {
+    const docs = await (BannedIPModel as any).find().sort({ timestamp: -1 });
+    return docs.map((d: any) => {
+      const obj = d.toObject ? d.toObject() : d;
+      return {
+        id: obj.id || (obj._id ? obj._id.toString() : 'ip-' + Math.random()),
+        ip: this.decryptStringIfNeeded(obj.ip),
+        reason: obj.reason || 'Bloqueo de red / Sanción',
+        severity: obj.severity || 'high',
+        bannedBy: obj.bannedBy || 'Sistema WAF',
+        timestamp: obj.timestamp || Date.now()
+      };
+    });
   }
 
   async getAllThreats() {
@@ -1147,8 +1223,8 @@ class DatabaseStore {
     });
   }
 
-  public async banUserAndIP(ip: string, reason: string, severity: 'low' | 'medium' | 'high' | 'critical', evidence?: string, userId?: string) {
-    await this.addBannedIP(ip);
+  public async banUserAndIP(ip: string, reason: string, severity: 'low' | 'medium' | 'high' | 'critical', evidence?: string, userId?: string, bannedBy?: string) {
+    await this.addBannedIP(ip, reason, severity, bannedBy || 'WAF Auto-Ban');
     
     if (userId) {
       const user = await this.getUser(userId);
@@ -1260,306 +1336,141 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
 
 // HTML Email Templates for Infraction Warnings & Sanction Reports
 function generateEmail1Html(user: UserRecord, infraction: InfractionRecord): string {
-  return `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; -webkit-font-smoothing: antialiased;">
-    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #020617; padding: 40px 20px;">
-      <tr>
-        <td align="center">
-          <table width="100%" max-width="600" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background: #0f172a; border-radius: 16px; border: 1px solid #1e293b; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
-            <!-- Header -->
-            <tr>
-              <td style="padding: 40px 30px; text-align: center; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-bottom: 1px solid #334155;">
-                <h1 style="margin: 0; color: #38bdf8; font-size: 28px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase;">AETHER SECURITY</h1>
-                <div style="margin-top: 12px; display: inline-block; background-color: #f59e0b20; border: 1px solid #f59e0b50; color: #fbbf24; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">⚠️ ADVERTENCIA DE SEGURIDAD 1/3</div>
-              </td>
-            </tr>
-            <!-- Content -->
-            <tr>
-              <td style="padding: 40px 30px;">
-                <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #f1f5f9; font-weight: 700;">Estimado/a ${user.name},</h2>
-                <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #94a3b8;">
-                  Nuestro sistema de moderación automatizado potenciado por <strong>Inteligencia Artificial</strong> ha detectado e interceptado un mensaje o archivo no permitido en su cuenta.
-                </p>
-                
-                <!-- Infraction Details -->
-                <div style="background-color: #020617; border-radius: 12px; padding: 24px; border: 1px solid #334155;">
-                  <h3 style="margin: 0 0 16px 0; font-size: 14px; color: #fbbf24; text-transform: uppercase; letter-spacing: 1px;">Detalles del Incidente</h3>
-                  
-                  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="font-size: 14px;">
-                    <tr>
-                      <td style="padding: 8px 0; color: #64748b; width: 140px;">Fecha y Hora</td>
-                      <td style="padding: 8px 0; color: #e2e8f0; font-weight: 600;">${infraction.dateFormatted}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #64748b;">Ubicación</td>
-                      <td style="padding: 8px 0; color: #e2e8f0; font-weight: 600;">${infraction.roomName || 'Sala de Chat'}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #64748b;">Motivo</td>
-                      <td style="padding: 8px 0; color: #f87171; font-weight: 600;">${infraction.reason}</td>
-                    </tr>
-                  </table>
-                  
-                  <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #1e293b;">
-                    <div style="color: #64748b; font-size: 13px; margin-bottom: 8px;">Evidencia Capturada:</div>
-                    <div style="background-color: #0f172a; border: 1px solid #1e293b; padding: 12px; border-radius: 8px; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; line-height: 1.5; word-break: break-all;">
-                      ${infraction.evidence}
-                    </div>
-                  </div>
-                  
-                  ${infraction.attachmentsInfo ? `
-                  <div style="margin-top: 16px;">
-                    <div style="color: #64748b; font-size: 13px; margin-bottom: 8px;">Adjuntos involucrados:</div>
-                    <div style="color: #e2e8f0; font-size: 14px; font-weight: 500;">${infraction.attachmentsInfo}</div>
-                  </div>
-                  ` : ''}
-                </div>
+  const content = `
+    <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
+      El motor de moderación y filtrado automatizado de <strong>Aether Security</strong> ha detectado e interceptado una transmisión no permitida asociada a su cuenta.
+    </p>
 
-                <!-- Warning Box -->
-                <div style="margin-top: 32px; background-color: #3b82f615; border-left: 4px solid #3b82f6; padding: 20px; border-radius: 0 8px 8px 0;">
-                  <h4 style="margin: 0 0 8px 0; color: #60a5fa; font-size: 15px;">Reglamento del Sistema</h4>
-                  <p style="margin: 0; color: #94a3b8; font-size: 14px; line-height: 1.5;">
-                    Por favor respete los términos de convivencia. Si acumula <strong>3 infracciones</strong> por contenido ilegal o prohibido (drogas, armas, violencia, malware, spam o acoso), su cuenta e IP serán suspendidas automáticamente de forma permanente.
-                  </p>
-                </div>
-              </td>
-            </tr>
-            <!-- Footer -->
-            <tr>
-              <td style="padding: 24px 30px; text-align: center; background-color: #020617; border-top: 1px solid #1e293b;">
-                <p style="margin: 0; font-size: 12px; color: #475569;">
-                  Aether Security System &bull; Notificación Automática IA<br>
-                  No responda a este correo.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-  </html>
+    <div style="background-color: #0f172a; border-radius: 14px; padding: 20px; border: 1px solid #1e293b; margin-bottom: 20px;">
+      <h3 style="margin: 0 0 14px 0; font-size: 11px; color: #f59e0b; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800;">📋 Informe de Incidente Registrado</h3>
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 16px;">
+        <tr>
+          <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 12px;">Fecha UTC</td>
+          <td align="right" style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #f8fafc; font-size: 12px; font-weight: 600;">${infraction.dateFormatted}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 12px;">Ubicación / Sala</td>
+          <td align="right" style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #f8fafc; font-size: 12px; font-weight: 600;">${infraction.roomName || 'Sala General'}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b; font-size: 12px;">Motivo de Intercepción</td>
+          <td align="right" style="padding: 8px 0; color: #fbbf24; font-size: 12px; font-weight: 700;">${infraction.reason}</td>
+        </tr>
+      </table>
+
+      <div style="padding-top: 12px; border-top: 1px solid #1e293b;">
+        <div style="color: #64748b; font-size: 11px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Fragmento de Evidencia Interceptada</div>
+        <div style="background-color: #070c18; border: 1px solid #1e293b; padding: 14px; border-radius: 10px; color: #38bdf8; font-family: monospace; font-size: 12px; line-height: 1.5; word-break: break-all;">
+          ${infraction.evidence}
+        </div>
+      </div>
+    </div>
+
+    <div style="background-color: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); padding: 16px; border-radius: 12px;">
+      <h4 style="margin: 0 0 6px 0; color: #fbbf24; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">⚠️ Protocolo de Sanciones Progresivas</h4>
+      <p style="margin: 0; color: #cbd5e1; font-size: 12px; line-height: 1.6;">
+        Le solicitamos mantener los estándares de convivencia y seguridad de la red. Acumular <strong>3 infracciones graves</strong> provocará la revocación inmediata de su cuenta y el bloqueo permanente de su IP.
+      </p>
+    </div>
   `;
+  return buildAetherEmail(`Aviso de Moderación: ${user.name}`, "⚠️ ADVERTENCIA 1/3", content, "#f59e0b");
 }
 
 function generateEmail2Html(user: UserRecord, infraction: InfractionRecord, fullHistory: InfractionRecord[]): string {
   const historyHtml = fullHistory.map((inf, idx) => `
     <div style="margin-bottom: 12px; padding-bottom: 12px; ${idx !== fullHistory.length - 1 ? 'border-bottom: 1px solid #1e293b;' : ''}">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-        <span style="color: #f59e0b; font-weight: 700; font-size: 13px;">Infracción #${inf.number}</span>
-        <span style="color: #64748b; font-size: 12px;">${inf.dateFormatted}</span>
-      </div>
-      <div style="color: #e2e8f0; font-size: 14px; font-weight: 500;">${inf.reason}</div>
+      <table width="100%" border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="color: #f43f5e; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Infracción #${inf.number}</td>
+          <td align="right" style="color: #64748b; font-size: 11px;">${inf.dateFormatted}</td>
+        </tr>
+      </table>
+      <div style="color: #f8fafc; font-size: 13px; font-weight: 600; margin-top: 4px;">${inf.reason}</div>
     </div>
   `).join('');
 
-  return `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; -webkit-font-smoothing: antialiased;">
-    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #020617; padding: 40px 20px;">
-      <tr>
-        <td align="center">
-          <table width="100%" max-width="600" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background: #0f172a; border-radius: 16px; border: 1px solid #7f1d1d; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(220, 38, 38, 0.15);">
-            <!-- Header -->
-            <tr>
-              <td style="padding: 40px 30px; text-align: center; background: linear-gradient(135deg, #450a0a 0%, #0f172a 100%); border-bottom: 1px solid #7f1d1d;">
-                <h1 style="margin: 0; color: #ef4444; font-size: 28px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase;">AETHER SECURITY</h1>
-                <div style="margin-top: 12px; display: inline-block; background-color: #ef444420; border: 1px solid #ef444450; color: #fca5a5; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">🚨 2DA ADVERTENCIA - ÚLTIMO AVISO 🚨</div>
-              </td>
-            </tr>
-            <!-- Content -->
-            <tr>
-              <td style="padding: 40px 30px;">
-                <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #f1f5f9; font-weight: 700;">Atención ${user.name},</h2>
-                <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #fecaca;">
-                  Su cuenta ha registrado una <strong>SEGUNDA INFRACCIÓN GRAVE</strong>. El mensaje o archivo que intentó transmitir ha sido bloqueado de inmediato por nuestros sistemas de seguridad.
-                </p>
-                
-                <!-- Latest Infraction -->
-                <div style="background-color: #020617; border-radius: 12px; padding: 24px; border: 1px solid #7f1d1d; margin-bottom: 24px;">
-                  <h3 style="margin: 0 0 16px 0; font-size: 14px; color: #f87171; text-transform: uppercase; letter-spacing: 1px;">Incidente Reciente</h3>
-                  <div style="margin-bottom: 12px;">
-                    <div style="color: #94a3b8; font-size: 13px; margin-bottom: 4px;">Motivo del Bloqueo</div>
-                    <div style="color: #fca5a5; font-size: 15px; font-weight: 600;">${infraction.reason}</div>
-                  </div>
-                  <div>
-                    <div style="color: #94a3b8; font-size: 13px; margin-bottom: 4px;">Evidencia</div>
-                    <div style="background-color: #0f172a; border: 1px solid #1e293b; padding: 12px; border-radius: 8px; color: #ef4444; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; line-height: 1.5; word-break: break-all;">
-                      ${infraction.evidence}
-                    </div>
-                  </div>
-                </div>
+  const content = `
+    <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #fecdd3;">
+      Se ha registrado una <strong>SEGUNDA INFRACCIÓN GRAVE (2/3)</strong> en la cuenta <strong>${user.email}</strong>. La actividad detectada violó estrictamente las normas de seguridad de la red.
+    </p>
 
-                <!-- History -->
-                <h3 style="margin: 0 0 16px 0; font-size: 15px; color: #e2e8f0;">Historial de Infracciones Acumuladas</h3>
-                <div style="background-color: #020617; border-radius: 12px; padding: 20px; border: 1px solid #334155;">
-                  ${historyHtml}
-                </div>
+    <div style="background-color: #0f172a; border-radius: 14px; padding: 20px; border: 1px solid rgba(239,68,68,0.4); margin-bottom: 20px;">
+      <h3 style="margin: 0 0 12px 0; font-size: 11px; color: #ef4444; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800;">🚨 Incidente Reciente Detectado</h3>
+      <div style="margin-bottom: 14px;">
+        <div style="color: #64748b; font-size: 11px; margin-bottom: 4px; text-transform: uppercase;">Causa de Intercepción</div>
+        <div style="color: #fca5a5; font-size: 13px; font-weight: 700;">${infraction.reason}</div>
+      </div>
+      <div>
+        <div style="color: #64748b; font-size: 11px; margin-bottom: 4px; text-transform: uppercase;">Evidencia Registrada</div>
+        <div style="background-color: #070c18; border: 1px solid #1e293b; padding: 12px; border-radius: 10px; color: #f87171; font-family: monospace; font-size: 12px; line-height: 1.5; word-break: break-all;">
+          ${infraction.evidence}
+        </div>
+      </div>
+    </div>
 
-                <!-- Final Warning Box -->
-                <div style="margin-top: 32px; background-color: #7f1d1d; border: 1px solid #b91c1c; padding: 24px; border-radius: 12px; text-align: center;">
-                  <h4 style="margin: 0 0 12px 0; color: #fef2f2; font-size: 18px; font-weight: 800; text-transform: uppercase;">⚠️ Último Aviso ⚠️</h4>
-                  <p style="margin: 0; color: #fecaca; font-size: 15px; line-height: 1.5; font-weight: 500;">
-                    Si comete <strong>1 infracción más</strong>, su cuenta (${user.email}) y su dirección IP serán SANCIÓNADAS Y EXPULSADAS PERMANENTEMENTE de la plataforma.
-                  </p>
-                </div>
-              </td>
-            </tr>
-            <!-- Footer -->
-            <tr>
-              <td style="padding: 24px 30px; text-align: center; background-color: #020617; border-top: 1px solid #1e293b;">
-                <p style="margin: 0; font-size: 12px; color: #475569;">
-                  Aether Security System &bull; Sistema Automático Disciplinario<br>
-                  No responda a este correo.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-  </html>
+    <h3 style="margin: 0 0 12px 0; font-size: 12px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 1px; font-weight: 800;">Historial Acumulado de Infracciones</h3>
+    <div style="background-color: #0f172a; border-radius: 14px; padding: 18px; border: 1px solid #1e293b; margin-bottom: 20px;">
+      ${historyHtml}
+    </div>
+
+    <div style="background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(127,29,29,0.4)); border: 1px solid #ef4444; padding: 20px; border-radius: 14px; text-align: center;">
+      <h4 style="margin: 0 0 8px 0; color: #fef2f2; font-size: 14px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px;">🚨 ÚLTIMO AVISO PREVIO A EXPULSIÓN PERMANENTE</h4>
+      <p style="margin: 0; color: #fecaca; font-size: 12px; line-height: 1.6; font-weight: 600;">
+        Una (1) infracción adicional ocasionará la suspensión automatizada, inmediata e irreversible de la cuenta <strong>${user.email}</strong> y de su dirección IP de red.
+      </p>
+    </div>
   `;
+  return buildAetherEmail(`Atención Requerida: ${user.name}`, "🚨 2DA ADVERTENCIA - ÚLTIMO AVISO", content, "#ef4444");
 }
 
 function generateSanctionEmailHtml(user: UserRecord, lastInfraction: InfractionRecord, fullHistory: InfractionRecord[], ip: string): string {
   const historyRows = fullHistory.map((inf, idx) => `
-    <div style="background-color: #0f172a; border-left: 4px solid #ef4444; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span style="color: #f87171; font-weight: 700; font-size: 14px; text-transform: uppercase;">Infracción #${inf.number || (idx + 1)} - ${inf.severity}</span>
-        <span style="color: #94a3b8; font-size: 12px;">${inf.dateFormatted}</span>
-      </div>
-      <div style="margin-bottom: 6px;">
-        <span style="color: #cbd5e1; font-size: 13px;"><strong>Motivo:</strong> ${inf.reason}</span>
-      </div>
-      <div style="margin-bottom: 8px;">
-        <span style="color: #94a3b8; font-size: 13px;"><strong>Sala:</strong> ${inf.roomName || 'Sala General'}</span>
-      </div>
-      <div style="background-color: #020617; padding: 10px; border-radius: 6px; border: 1px solid #1e293b; font-family: monospace; font-size: 12px; color: #38bdf8; word-break: break-all;">
+    <div style="background-color: #0f172a; border-left: 4px solid #ef4444; border-radius: 10px; padding: 16px; margin-bottom: 12px; border-top: 1px solid #1e293b; border-right: 1px solid #1e293b; border-bottom: 1px solid #1e293b;">
+      <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 8px;">
+        <tr>
+          <td style="color: #f87171; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Infracción #${inf.number || (idx + 1)} — Severidad: ${inf.severity}</td>
+          <td align="right" style="color: #64748b; font-size: 11px;">${inf.dateFormatted}</td>
+        </tr>
+      </table>
+      <div style="color: #cbd5e1; font-size: 12px; margin-bottom: 6px;"><strong>Motivo:</strong> ${inf.reason}</div>
+      <div style="color: #64748b; font-size: 11px; margin-bottom: 8px;"><strong>Ubicación:</strong> ${inf.roomName || 'Sala General'}</div>
+      <div style="background-color: #070c18; padding: 10px; border-radius: 8px; border: 1px solid #1e293b; font-family: monospace; font-size: 11px; color: #ef4444; word-break: break-all;">
         ${inf.evidence}
       </div>
     </div>
   `).join('');
 
-  return `
-  <!DOCTYPE html>
-  <html lang="es">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #0f172a; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; -webkit-font-smoothing: antialiased;">
-    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #0f172a; padding: 40px 15px;">
-      <tr>
-        <td align="center">
-          <table width="100%" max-width="600" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background: #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7); border: 1px solid #334155;">
-            
-            <!-- Header Section with Logo Area -->
-            <tr>
-              <td style="padding: 40px 30px; text-align: center; background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%); border-bottom: 2px solid #ef4444;">
-                <div style="margin-bottom: 16px;">
-                  <!-- Logo Placeholder -->
-                  <div style="display: inline-block; width: 64px; height: 64px; background-color: #ef4444; border-radius: 16px; line-height: 64px; font-size: 32px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">🛡️</div>
-                </div>
-                <h1 style="margin: 0 0 10px 0; color: #fef2f2; font-size: 28px; font-weight: 900; letter-spacing: -0.5px;">AETHER SECURITY</h1>
-                <div style="display: inline-block; background-color: #fee2e2; color: #991b1b; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">Notificación de Sanción Automática</div>
-              </td>
-            </tr>
-            
-            <!-- Main Content -->
-            <tr>
-              <td style="padding: 40px 30px;">
-                <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #f87171; font-weight: 800;">Acceso Suspendido Permanentemente</h2>
-                <p style="margin: 0 0 30px 0; font-size: 15px; line-height: 1.6; color: #cbd5e1;">
-                  Hola <strong>${user.name}</strong>,<br><br>
-                  Le informamos que su cuenta y dirección IP han sido <strong>suspendidas de forma definitiva</strong> de nuestra plataforma. Nuestro sistema de moderación IA ha registrado la acumulación de <strong>3 infracciones graves</strong> a los protocolos de seguridad y convivencia.
-                </p>
-                
-                <!-- Report Details Box -->
-                <div style="background-color: #0f172a; border-radius: 12px; padding: 24px; border: 1px solid #334155; margin-bottom: 30px;">
-                  <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #e2e8f0; font-weight: 700; border-bottom: 1px solid #1e293b; padding-bottom: 10px;">📋 Detalles de la Sanción</h3>
-                  
-                  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="font-size: 14px;">
-                    <tr>
-                      <td style="padding: 8px 0; color: #94a3b8; width: 140px;">Nivel de Gravedad</td>
-                      <td style="padding: 8px 0; color: #ef4444; font-weight: 800;">CRÍTICA (Nivel 3)</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #94a3b8;">Motivo Principal</td>
-                      <td style="padding: 8px 0; color: #f8fafc; font-weight: 600;">${lastInfraction.reason}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #94a3b8;">Hora de Aplicación</td>
-                      <td style="padding: 8px 0; color: #f8fafc;">${lastInfraction.dateFormatted}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #94a3b8;">IP Identificada</td>
-                      <td style="padding: 8px 0; color: #fca5a5; font-family: monospace; font-weight: 600;">${ip}</td>
-                    </tr>
-                  </table>
+  const content = `
+    <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
+      Le informamos formalmente que la cuenta <strong>${user.email}</strong> y la dirección IP <strong>${ip}</strong> han sido <strong>suspendidas de manera permanente</strong> de toda la infraestructura de Aether Security por haber alcanzado el límite máximo de <strong>3 infracciones de seguridad</strong>.
+    </p>
 
-                  <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #1e293b;">
-                    <div style="color: #94a3b8; font-size: 13px; margin-bottom: 8px;">Evidencia Adjunta (Última Infracción):</div>
-                    <div style="background-color: #020617; padding: 12px; border-radius: 8px; border: 1px solid #1e293b; color: #38bdf8; font-family: monospace; font-size: 13px; word-break: break-all;">
-                      ${lastInfraction.evidence}
-                    </div>
-                  </div>
-                </div>
+    <div style="background-color: #0f172a; border-radius: 14px; padding: 20px; border: 1px solid #1e293b; margin-bottom: 24px;">
+      <h3 style="margin: 0 0 16px 0; font-size: 11px; color: #ef4444; font-weight: 800; border-bottom: 1px solid #1e293b; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">📋 Ficha de Bloqueo Administrativo</h3>
+      <table width="100%" border="0" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 12px;">Estado del Sistema</td>
+          <td align="right" style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #ef4444; font-size: 12px; font-weight: 900;">EXPULSADO / BANEAR IP</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 12px;">Cuenta Suspendida</td>
+          <td align="right" style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #f8fafc; font-size: 12px; font-weight: 600;">${user.email}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #64748b; font-size: 12px;">IP Bloqueada</td>
+          <td align="right" style="padding: 8px 0; border-bottom: 1px solid #1e293b; color: #f8fafc; font-size: 12px; font-weight: 600; font-family: monospace;">${ip}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b; font-size: 12px;">Detonante de Sanción</td>
+          <td align="right" style="padding: 8px 0; color: #f87171; font-size: 12px; font-weight: 600;">Infracción 3/3 — ${lastInfraction.reason}</td>
+        </tr>
+      </table>
+    </div>
 
-                <!-- History Summary -->
-                <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #e2e8f0; font-weight: 700;">Resumen de Infracciones Acumuladas</h3>
-                <div style="margin-bottom: 30px;">
-                  ${historyRows}
-                </div>
-
-                <!-- Appeal Section -->
-                <div style="text-align: center; background: linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%); border: 1px solid #3730a3; padding: 32px 20px; border-radius: 12px;">
-                  <h3 style="margin: 0 0 12px 0; color: #818cf8; font-size: 18px; font-weight: 800;">¿Fue un error?</h3>
-                  <p style="margin: 0 0 24px 0; color: #c7d2fe; font-size: 14px; line-height: 1.5;">
-                    Si crees que la Inteligencia Artificial cometió un error (falso positivo), puedes apelar esta sanción comunicándote con nuestro equipo de moderación humana.
-                  </p>
-                  
-                  <a href="https://discord.gg/aether-security" style="display: inline-block; background-color: #5865F2; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 16px; padding: 14px 32px; border-radius: 8px; box-shadow: 0 4px 14px rgba(88,101,242,0.4); transition: background-color 0.2s;">
-                    Apelar en Discord
-                  </a>
-                  
-                  <div style="margin-top: 20px; font-size: 12px; color: #6366f1;">
-                    Proporciona esta ID al equipo: <strong style="font-family: monospace; color: #a5b4fc;">${user.id}</strong>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            
-            <!-- Footer -->
-            <tr>
-              <td style="padding: 24px 30px; text-align: center; background-color: #0f172a; border-top: 1px solid #334155;">
-                <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b;">
-                  Aether Security System &bull; Moderación IA
-                </p>
-                <p style="margin: 0; font-size: 11px; color: #475569;">
-                  Este es un mensaje automático. Por favor, no respondas a este correo.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-  </html>
+    <h3 style="margin: 0 0 14px 0; font-size: 12px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 1px; font-weight: 800;">Historial Completo de Infracciones</h3>
+    ${historyRows}
   `;
+  return buildAetherEmail(`Suspensión Definitiva de Cuenta`, "⛔ SANCIÓN DEFINITIVA", content, "#ef4444");
 }
 
 async function handleUserInfractionAndNotify(
@@ -1832,21 +1743,29 @@ app.post("/api/auth/send-verification-code", async (req, res) => {
   db.logSecurityEvent(ip, "LOGIN_SUCCESS", cleanEmail, `Código de verificación OTP generado para ${cleanEmail}`);
 
   // Send real email via SMTP / Nodemailer
-  const htmlTemplate = `
-  <div style="font-family: Arial, sans-serif; background-color: #030712; color: #f8fafc; padding: 32px; border-radius: 16px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-    <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="color: #06b6d4; font-size: 22px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">PÁGINA PROTEGIDA</h1>
-      <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Sistema de Verificación de Identidad por Correo</p>
+  const content = `
+    <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
+      Se ha iniciado el proceso de verificación de identidad para vincular la dirección de correo <strong>${cleanEmail}</strong> en la red de <strong>Aether Security</strong>.
+    </p>
+
+    <div style="background: linear-gradient(135deg, rgba(6,182,212,0.18), rgba(15,23,42,0.9)); border: 1px solid #06b6d4; border-radius: 16px; padding: 28px 20px; text-align: center; margin: 24px 0; box-shadow: 0 10px 25px rgba(6,182,212,0.15);">
+      <div style="font-size: 11px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;">
+        Código de Verificación OTP
+      </div>
+      <div style="font-size: 42px; font-weight: 900; letter-spacing: 10px; color: #22d3ee; font-family: monospace; text-shadow: 0 0 20px rgba(34,211,238,0.4); margin: 8px 0;">
+        ${code}
+      </div>
+      <div style="display: inline-block; background-color: rgba(6,182,212,0.2); border: 1px solid rgba(6,182,212,0.4); color: #67e8f9; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-top: 8px;">
+        ⏱️ Válido durante 10 minutos
+      </div>
     </div>
-    <div style="background-color: #0b1329; border: 1px solid #0891b2; border-radius: 12px; padding: 24px; text-align: center; margin: 20px 0;">
-      <p style="color: #94a3b8; font-size: 13px; margin-bottom: 12px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Tu Código de Verificación OTP</p>
-      <div style="font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #22d3ee; font-family: monospace;">${code}</div>
-    </div>
-    <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; text-align: center;">Ingresa este código en la plataforma para completar la verificación de tu dirección Gmail.</p>
-    <div style="border-t: 1px solid #1e293b; margin-top: 24px; padding-top: 16px; text-align: center;">
-      <p style="font-size: 11px; color: #475569;">Este código expira en 10 minutos. Si no solicitaste este código, puedes ignorar este correo de forma segura.</p>
-    </div>
-  </div>`;
+
+    <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; text-align: center; margin: 0;">
+      Introduzca esta clave de 6 dígitos en la pantalla de confirmación para validar su cuenta y activar la encriptación de datos.
+    </p>
+  `;
+
+  const htmlTemplate = buildAetherEmail('Verificación de Identidad', 'ACTIVACIÓN DE CUENTA', content, '#06b6d4');
 
   const emailRes = await sendRealEmail(
     cleanEmail,
@@ -2085,21 +2004,29 @@ app.post("/api/auth/forgot-password", async (req, res) => {
   emailVerificationCodes.set("reset:" + cleanEmail, { codeHash: db.hashPassword(code), expiresAt });
   db.logSecurityEvent(ip, "LOGIN_SUCCESS", cleanEmail, `Código de recuperación de contraseña enviado a ${cleanEmail}`);
 
-  const htmlTemplate = `
-  <div style="font-family: Arial, sans-serif; background-color: #030712; color: #f8fafc; padding: 32px; border-radius: 16px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-    <div style="text-align: center; margin-bottom: 24px;">
-      <h1 style="color: #06b6d4; font-size: 22px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">PÁGINA PROTEGIDA</h1>
-      <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Recuperación de Contraseña</p>
+  const content = `
+    <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
+      Hemos recibido una solicitud para restablecer la contraseña asociada a la cuenta <strong>${cleanEmail}</strong>.
+    </p>
+
+    <div style="background: linear-gradient(135deg, rgba(139,92,246,0.18), rgba(15,23,42,0.9)); border: 1px solid #8b5cf6; border-radius: 16px; padding: 28px 20px; text-align: center; margin: 24px 0; box-shadow: 0 10px 25px rgba(139,92,246,0.15);">
+      <div style="font-size: 11px; font-weight: 800; color: #c084fc; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;">
+        Código OTP de Recuperación
+      </div>
+      <div style="font-size: 42px; font-weight: 900; letter-spacing: 10px; color: #a78bfa; font-family: monospace; text-shadow: 0 0 20px rgba(167,139,250,0.4); margin: 8px 0;">
+        ${code}
+      </div>
+      <div style="display: inline-block; background-color: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.4); color: #ddd6fe; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-top: 8px;">
+        ⏱️ Válido durante 10 minutos
+      </div>
     </div>
-    <div style="background-color: #0b1329; border: 1px solid #0891b2; border-radius: 12px; padding: 24px; text-align: center; margin: 20px 0;">
-      <p style="color: #94a3b8; font-size: 13px; margin-bottom: 12px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Tu Código para Cambiar Contraseña</p>
-      <div style="font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #38bdf8; font-family: monospace;">${code}</div>
-    </div>
-    <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; text-align: center;">Ingresa este código de 6 dígitos para establecer tu nueva contraseña en la plataforma.</p>
-    <div style="border-t: 1px solid #1e293b; margin-top: 24px; padding-top: 16px; text-align: center;">
-      <p style="font-size: 11px; color: #475569;">Válido por 10 minutos. Si no solicitaste este cambio, ignora este correo.</p>
-    </div>
-  </div>`;
+
+    <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; text-align: center; margin: 0;">
+      Ingrese este código en la ventana de recuperación. Si no ha solicitado esta acción, ignore este mensaje.
+    </p>
+  `;
+
+  const htmlTemplate = buildAetherEmail(`Recuperación de Contraseña`, "RESTABLECER ACCESO", content, "#8b5cf6");
 
   const emailRes = await sendRealEmail(
     cleanEmail,
@@ -2192,10 +2119,74 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
       createdAt: u.createdAt,
       isBanned: u.isBanned,
       isPremium: u.isPremium,
-      premiumExpiresAt: u.premiumExpiresAt
+      premiumExpiresAt: u.premiumExpiresAt,
+      avatar: u.avatar
     },
     admin2FAVerified: is2FA
   });
+});
+
+app.put("/api/users/profile", authenticateToken, async (req, res) => {
+  try {
+    const user = (req as any).user as UserRecord;
+    const { name, avatar } = req.body;
+    
+    if (name && typeof name === 'string' && name.trim().length > 0) {
+      user.name = name.trim();
+    }
+    if (avatar !== undefined) {
+      user.avatar = avatar;
+    }
+    
+    await db.saveUser(user);
+    
+    res.json({
+      message: "Perfil actualizado correctamente",
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        ip: user.ip,
+        role: user.role,
+        status: user.status,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt,
+        isBanned: user.isBanned,
+        isPremium: !!user.isPremium,
+        premiumExpiresAt: user.premiumExpiresAt,
+        avatar: user.avatar
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Error al actualizar el perfil" });
+  }
+});
+
+app.post("/api/users/change-password", authenticateToken, async (req, res) => {
+  try {
+    const user = (req as any).user as UserRecord;
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Contraseña actual y nueva contraseña son requeridas" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "La nueva contraseña debe tener al menos 6 caracteres" });
+    }
+    
+    const isOldValid = db.hashPassword(currentPassword) === user.passwordHash;
+    if (!isOldValid) {
+      return res.status(400).json({ error: "La contraseña actual es incorrecta" });
+    }
+    
+    user.passwordHash = db.hashPassword(newPassword);
+    await db.saveUser(user);
+    db.logSecurityEvent(getClientIP(req), "LOGIN_SUCCESS", user.email, "Contraseña cambiada exitosamente desde Perfil");
+    
+    res.json({ message: "Contraseña cambiada exitosamente" });
+  } catch (err: any) {
+    res.status(500).json({ error: "Error al cambiar contraseña" });
+  }
 });
 
 // ==========================================
@@ -2314,17 +2305,23 @@ app.post("/api/admin/toggle-role", authenticateToken, requireAdmin, async (req, 
 app.get("/api/rooms/list", authenticateToken, async (req, res) => {
   const user = (req as any).user as UserRecord;
   const roomList = (await db.getAllRooms())
-    .filter(r => user.role === 'admin' || !r.isPrivate || r.createdById === user.id)
-    .map(r => ({
-      ...r,
-      activeUsersCount: roomConnections.get(r.id)?.size || 0
-    }));
+    .map(r => {
+      const mode: 'open' | 'closed' | 'global' = r.accessMode || (r.isClosed ? 'closed' : (r.isPrivate ? 'open' : 'global'));
+      return {
+        ...r,
+        accessMode: mode,
+        isPrivate: mode !== 'global',
+        isClosed: mode === 'closed',
+        activeUsersCount: roomConnections.get(r.id)?.size || 0
+      };
+    })
+    .filter(r => user.role === 'admin' || r.accessMode === 'global' || r.createdById === user.id);
   res.json(roomList);
 });
 
 app.post("/api/rooms/create", authenticateToken, async (req, res) => {
   const user = (req as any).user as UserRecord;
-  const { name, isPrivate } = req.body;
+  const { name, isPrivate, accessMode } = req.body;
 
   if (!name) return res.status(400).json({ error: "Nombre de sala requerido" });
   const userRooms = (await db.getAllRooms() as any[]).filter(r => r.createdById === user.id);
@@ -2333,6 +2330,13 @@ app.post("/api/rooms/create", authenticateToken, async (req, res) => {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const roomId = "room-" + crypto.randomUUID();
 
+  let resolvedMode: 'open' | 'closed' | 'global' = 'global';
+  if (accessMode && ['open', 'closed', 'global'].includes(accessMode)) {
+    resolvedMode = accessMode;
+  } else if (isPrivate) {
+    resolvedMode = 'open';
+  }
+
   const room: RoomRecord = {
     id: roomId,
     name: name.trim(),
@@ -2340,15 +2344,12 @@ app.post("/api/rooms/create", authenticateToken, async (req, res) => {
     createdById: user.id,
     createdByName: user.name,
     createdAt: Date.now(),
-    isPrivate: !!isPrivate
+    isPrivate: resolvedMode !== 'global',
+    isClosed: resolvedMode === 'closed',
+    accessMode: resolvedMode
   };
 
   await db.saveRoom(room);
-  /* isDirty ignored */
-  /* room index set */
-  /* messages.set ignored */;
-  /* isDirty ignored */
-
   redis.del("rooms_list");
   res.json(room);
 });
@@ -2357,32 +2358,86 @@ app.post("/api/rooms/join-code", authenticateToken, async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: "Código de acceso requerido" });
 
-  const roomId = (await db.getRoomByCode(code.trim()))?.id;
-  if (!roomId) return res.status(404).json({ error: "Sala no localizada" });
+  const room = await db.getRoomByCode(code.trim());
+  if (!room) return res.status(404).json({ error: "Sala no localizada con ese código" });
 
-  const room = await db.getRoom(roomId);
-  if (room.isClosed) return res.status(403).json({ error: "La sala está cerrada por el administrador o creador." });
-  res.json(room);
+  const mode = room.accessMode || (room.isClosed ? 'closed' : (room.isPrivate ? 'open' : 'global'));
+  if (mode === 'closed' || room.isClosed) {
+    return res.status(403).json({ error: "Esta sala está CERRADA por su creador. No se admiten nuevos ingresos." });
+  }
+
+  res.json({
+    ...room,
+    accessMode: mode,
+    isPrivate: mode !== 'global',
+    isClosed: mode === 'closed'
+  });
 });
 
+app.post("/api/rooms/update-access-mode", authenticateToken, async (req, res) => {
+  const { roomId, accessMode } = req.body;
+  const user = (req as any).user as UserRecord;
+
+  if (!roomId || !['open', 'closed', 'global'].includes(accessMode)) {
+    return res.status(400).json({ error: "Parámetros de acceso inválidos" });
+  }
+
+  const room = await db.getRoom(roomId);
+  if (!room) {
+    return res.status(404).json({ error: "Sala no encontrada" });
+  }
+
+  if (room.createdById !== user.id && user.role !== 'admin') {
+    return res.status(403).json({ error: "No tienes permisos para modificar esta sala" });
+  }
+
+  room.accessMode = accessMode;
+  room.isClosed = (accessMode === 'closed');
+  room.isPrivate = (accessMode !== 'global');
+  await db.saveRoom(room);
+  db.saveDatabase();
+
+  const modeLabels: Record<string, string> = {
+    global: '🌐 Global (Pública)',
+    open: '🔑 Abierta (Solo con Código)',
+    closed: '🔒 Cerrada (Nadie puede entrar)'
+  };
+
+  broadcastToRoom(roomId, {
+    type: "SYSTEM_NOTIFICATION",
+    text: `El creador cambió el acceso de la sala a: ${modeLabels[accessMode]}`,
+    activeCount: roomConnections.get(roomId)?.size || 0
+  });
+
+  broadcastToRoom(roomId, {
+    type: "ROOM_MODE_UPDATED",
+    roomId,
+    accessMode,
+    isClosed: room.isClosed,
+    isPrivate: room.isPrivate
+  });
+
+  res.json({ message: `Modalidad cambiada a ${modeLabels[accessMode]}`, room });
+});
 
 app.post("/api/rooms/toggle-closed", authenticateToken, async (req, res) => {
   const { roomId, isClosed } = req.body;
   const user = (req as any).user as UserRecord;
-  
+
   if (!roomId || !((await db.getRoom(roomId)) !== null)) {
     return res.status(404).json({ error: "Sala no encontrada" });
   }
-  
+
   const room = await db.getRoom(roomId);
   if (room.createdById !== user.id && user.role !== 'admin') {
     return res.status(403).json({ error: "No tienes permisos para modificar esta sala" });
   }
-  
+
   room.isClosed = !!isClosed;
+  room.accessMode = isClosed ? 'closed' : 'open';
   await db.saveRoom(room);
   db.saveDatabase();
-  
+
   res.json({ message: room.isClosed ? "Sala cerrada correctamente" : "Sala abierta correctamente", room });
 });
 
@@ -2628,7 +2683,12 @@ app.post("/api/admin/edit-user", authenticateToken, requireAdmin, async (req, re
     u.isBanned = status === 'Baneado';
   }
   if (ip !== undefined && ip.trim() !== "") u.ip = ip.trim();
-  if (isPremium !== undefined) u.isPremium = !!isPremium;
+  if (isPremium !== undefined) {
+    u.isPremium = !!isPremium;
+    if (u.isPremium && (!u.premiumExpiresAt || u.premiumExpiresAt <= Date.now())) {
+      u.premiumExpiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    }
+  }
   if (premiumExpiresAt !== undefined) u.premiumExpiresAt = premiumExpiresAt ? Number(premiumExpiresAt) : undefined;
 
   await db.saveUser(u);
@@ -2730,25 +2790,38 @@ app.post("/api/admin/reset-user-password", authenticateToken, requireAdmin, asyn
   res.json({ message: `Contraseña de ${u.name} restablecida exitosamente.` });
 });
 
-app.post("/api/admin/ban-ip", authenticateToken, requireAdmin, async (req, res) => {
-  const { ip, reason, severity, evidence, userId } = req.body;
-  if (!ip) return res.status(400).json({ error: "IP requerida" });
+app.get("/api/admin/banned-ips", authenticateToken, requireAdmin, async (req, res) => {
+  const list = await db.getAllBannedIPsDetails();
+  res.json(list);
+});
 
-  db.banUserAndIP(
-    ip.trim(),
+app.post("/api/admin/ban-ip", authenticateToken, requireAdmin, async (req, res) => {
+  const adminUser = (req as any).user as UserRecord;
+  const { ip, reason, severity, evidence, userId, bannedBy } = req.body;
+  if (!ip) return res.status(400).json({ error: "Dirección IP requerida" });
+
+  const cleanIp = ip.trim();
+  const banSource = bannedBy || `Admin (${adminUser?.name || adminUser?.email || 'Manual'})`;
+
+  await db.banUserAndIP(
+    cleanIp,
     reason || "Sanción manual de Administrador",
     severity || "high",
-    evidence || "Sancionado desde el Dashboard de Admin",
-    userId
+    evidence || "Sanción aplicada manualmente desde el Panel de Administrador",
+    userId,
+    banSource
   );
 
-  res.json({ message: `IP ${ip} bloqueada exitosamente con estado Baneado` });
+  res.json({ message: `IP ${cleanIp} bloqueada exitosamente en el firewall.` });
 });
 
 app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, async (req, res) => {
-  const { ip, userId } = req.body;
-  if (ip) {
-    await db.removeBannedIP(ip.trim());
+  const adminUser = (req as any).user as UserRecord;
+  const { ip, userId, targetIp } = req.body;
+  const cleanIp = (ip || targetIp || '').trim();
+
+  if (cleanIp) {
+    await db.removeBannedIP(cleanIp);
   }
 
   if (userId && ((await db.getUser(userId)) !== null)) {
@@ -2757,18 +2830,21 @@ app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, async (req, res
     u.status = 'Activo';
     u.banReason = undefined;
     u.banEvidence = undefined;
-  } else {
-    for (const u of (await db.getAllUsers()).values()) {
-      if (u.ip === ip) {
+    await db.saveUser(u);
+  } else if (cleanIp) {
+    const allUsers = await db.getAllUsers();
+    for (const u of allUsers) {
+      if (u.ip === cleanIp) {
         u.isBanned = false;
         u.status = 'Activo';
         u.banReason = undefined;
+        await db.saveUser(u);
       }
     }
   }
 
-  redis.flush();
-  res.json({ message: "IP y usuario restablecidos a estado Activo" });
+  db.logSecurityEvent("ADMIN", "IP_BAN_TRIGGERED", cleanIp, `IP ${cleanIp} desbloqueada por admin ${adminUser?.name || 'Sistema'}`);
+  res.json({ message: `IP ${cleanIp || 'especificada'} desbloqueada exitosamente.` });
 });
 
 app.post("/api/admin/premium/add", authenticateToken, requireAdmin, async (req, res) => {
@@ -2918,18 +2994,107 @@ app.post("/api/admin/smtp-config", authenticateToken, requireAdmin, async (req, 
   });
 });
 
+// ==========================================
+// REAL-TIME WEBSOCKET SECURITY MONITOR API
+// ==========================================
+app.get("/api/admin/ws-monitor/stats", authenticateToken, requireAdmin, async (req, res) => {
+  const activeClients = Array.from(wsClientTrackerMap.values()).map(t => ({
+    id: t.id,
+    ip: t.ip,
+    userId: t.userId,
+    userName: t.userName,
+    userEmail: t.userEmail,
+    roomId: t.roomId,
+    connectedAt: t.connectedAt,
+    lastPingAt: t.lastPingAt,
+    messageCountWindow: t.messageCountWindow,
+    roomSwitchCountWindow: t.roomSwitchCountWindow,
+    authFailures: t.authFailures,
+    status: t.status
+  }));
+
+  const bannedIpsList = (await db.getAllThreats())
+    .filter(t => t.blocked && t.ip)
+    .map(t => ({ ip: t.ip, reason: t.reason, bannedAt: t.timestamp }));
+
+  res.json({
+    activeSockets: wsClientTrackerMap.size,
+    authenticatedSockets: activeClients.filter(c => c.userId).length,
+    totalMessagesProcessed: totalWsMessagesProcessed,
+    messagesPerSecond: wsMessagesLastSecond,
+    suspiciousEventsCount: wsRecentEvents.filter(e => e.severity === 'alert' || e.severity === 'critical').length,
+    autoBlockedIpsCount: bannedIpsList.length,
+    activeClients,
+    heuristics: wsHeuristics,
+    bannedIps: bannedIpsList,
+    recentEvents: wsRecentEvents.slice(0, 50)
+  });
+});
+
+app.post("/api/admin/ws-monitor/heuristics", authenticateToken, requireAdmin, async (req, res) => {
+  const { heuristicId, enabled, threshold } = req.body;
+  const rule = wsHeuristics.find(h => h.id === heuristicId);
+  if (rule) {
+    if (enabled !== undefined) rule.enabled = Boolean(enabled);
+    if (threshold !== undefined && typeof threshold === 'number' && threshold > 0) rule.threshold = threshold;
+    return res.json({ message: "Regla heurística actualizada", rule });
+  }
+  res.status(404).json({ error: "Regla heurística no encontrada" });
+});
+
+app.post("/api/admin/ws-monitor/disconnect", authenticateToken, requireAdmin, async (req, res) => {
+  const { socketId } = req.body;
+  for (const [ws, tracker] of wsClientTrackerMap.entries()) {
+    if (tracker.id === socketId) {
+      ws.send(JSON.stringify({ type: "ERROR", message: "Conexión desconectada por el administrador WAF" }));
+      ws.close();
+      wsClientTrackerMap.delete(ws);
+      logWsSecurityEvent('MANUAL_BLOCK', tracker.ip, `Desconexión forzada de socket ${socketId}`, 'warn');
+      return res.json({ message: "Socket desconectado exitosamente" });
+    }
+  }
+  res.status(404).json({ error: "Socket no localizado" });
+});
+
+app.post("/api/admin/ws-monitor/simulate-threat", authenticateToken, requireAdmin, async (req, res) => {
+  const { threatType } = req.body;
+  const testIp = "192.168.1.250";
+  if (threatType === 'FLOOD') {
+    const reason = "Simulación WAF: Inundación de mensajes de prueba (Flood Attack Test)";
+    logWsSecurityEvent('HEURISTIC_TRIGGER', testIp, reason, 'alert');
+    await db.banUserAndIP(testIp, reason, 'high', 'Simulación de prueba heurística WAF');
+    return res.json({ message: `Amenaza FLOOD simulada para IP ${testIp}. Se registró evento y bloqueo de prueba.` });
+  } else if (threatType === 'AUTH_BURST') {
+    const reason = "Simulación WAF: Ráfaga de autenticación fallida (Auth Burst Test)";
+    logWsSecurityEvent('HEURISTIC_TRIGGER', testIp, reason, 'alert');
+    await db.banUserAndIP(testIp, reason, 'high', 'Simulación de prueba de contraseña de fuerza bruta');
+    return res.json({ message: `Amenaza AUTH_BURST simulada para IP ${testIp}. Se registró evento y bloqueo de prueba.` });
+  }
+  res.json({ message: "Simulación de prueba completada" });
+});
+
 // TEST SMTP Email Dispatch
 app.post("/api/admin/test-smtp", authenticateToken, requireAdmin, async (req, res) => {
   const { toEmail } = req.body;
   const targetEmail = toEmail ? String(toEmail).trim() : "ydark126@gmail.com";
 
-  const testHtml = `
-  <div style="font-family: Arial, sans-serif; background-color: #030712; color: #f8fafc; padding: 32px; border-radius: 16px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
-    <h2 style="color: #10b981; margin-top: 0;">Prueba de Envío de Correo Exitoso</h2>
-    <p>Este es un correo de prueba enviado desde el servidor de tu <strong>Aether Security</strong>.</p>
-    <p>Si estás leyendo este mensaje en tu bandeja de entrada de Gmail, la configuración SMTP y tu Contraseña de Aplicación de Google funcionan al 100%.</p>
-    <p style="color: #64748b; font-size: 12px; margin-top: 20px;">Servidor SMTP: ${currentSmtpConfig.host}:${currentSmtpConfig.port}</p>
-  </div>`;
+  const content = `
+    <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
+      Este es un mensaje de prueba emitido exitosamente por la infraestructura de <strong>Aether Security</strong>.
+    </p>
+
+    <div style="background-color: #0f172a; border-radius: 14px; padding: 20px; border: 1px solid #10b981; margin-bottom: 20px;">
+      <h3 style="margin: 0 0 12px 0; font-size: 11px; color: #10b981; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800;">✅ Estado de Conexión SMTP: ACTIVO</h3>
+      <p style="margin: 0 0 12px 0; color: #cbd5e1; font-size: 13px; line-height: 1.5;">
+        Su configuración SMTP y las credenciales de la contraseña de aplicación de Google están funcionando al 100%.
+      </p>
+      <div style="background-color: #070c18; border: 1px solid #1e293b; padding: 10px 14px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #34d399;">
+        Host SMTP: ${currentSmtpConfig.host}:${currentSmtpConfig.port} | Usuario: ${currentSmtpConfig.user}
+      </div>
+    </div>
+  `;
+
+  const testHtml = buildAetherEmail("Diagnóstico SMTP Completado", "PRUEBA DE SERVIDOR", content, "#10b981");
 
   const result = await sendRealEmail(
     targetEmail,
@@ -3085,6 +3250,128 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 const roomConnections = new Map<string, Set<WebSocket>>();
 const wsUserMap = new Map<WebSocket, { userId: string; name: string; email: string; ip: string; roomId?: string }>();
 
+// Telemetry & Heuristic Monitor Engine
+interface WsClientTracker {
+  id: string;
+  ws: WebSocket;
+  ip: string;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  roomId?: string;
+  connectedAt: number;
+  lastPingAt: number;
+  messageCountWindow: number;
+  roomSwitchCountWindow: number;
+  authFailures: number;
+  status: 'active' | 'authenticated' | 'suspicious' | 'blocked';
+}
+
+const wsClientTrackerMap = new Map<WebSocket, WsClientTracker>();
+
+interface HeuristicRule {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  threshold: number;
+  unit: string;
+  action: 'WARN' | 'DISCONNECT' | 'AUTO_BAN';
+}
+
+let wsHeuristics: HeuristicRule[] = [
+  { id: 'flood_attack', name: 'Inundación de Mensajes (Flood)', description: 'Bloquea si se envían demasiados mensajes en 3 segundos.', enabled: true, threshold: 8, unit: 'msg / 3s', action: 'AUTO_BAN' },
+  { id: 'auth_burst', name: 'Ráfaga Autenticación Fallida', description: 'Bloquea si hay múltiples intentos de autenticación inválida.', enabled: true, threshold: 3, unit: 'intentos / 10s', action: 'AUTO_BAN' },
+  { id: 'payload_oversize', name: 'Frame Sobrecargado (Payload)', description: 'Detecta tramas WebSocket inusualmente grandes para prevenir buffer overflow.', enabled: true, threshold: 30000, unit: 'caracteres', action: 'AUTO_BAN' },
+  { id: 'rapid_room_hopping', name: 'Barrido Acelerado de Salas', description: 'Bloquea bots cambiando de salas a velocidad sobrehumana.', enabled: true, threshold: 5, unit: 'cambios / 3s', action: 'AUTO_BAN' },
+];
+
+let wsRecentEvents: Array<{
+  id: string;
+  type: 'CONNECT' | 'DISCONNECT' | 'HEURISTIC_TRIGGER' | 'AUTO_BAN' | 'MANUAL_BLOCK' | 'PING';
+  ip: string;
+  detail: string;
+  severity: 'info' | 'warn' | 'alert' | 'critical';
+  timestamp: number;
+}> = [];
+
+function logWsSecurityEvent(type: any, ip: string, detail: string, severity: 'info' | 'warn' | 'alert' | 'critical') {
+  const event = {
+    id: "wsevt-" + crypto.randomUUID(),
+    type,
+    ip,
+    detail,
+    severity,
+    timestamp: Date.now()
+  };
+  wsRecentEvents.unshift(event);
+  if (wsRecentEvents.length > 100) wsRecentEvents.pop();
+}
+
+let totalWsMessagesProcessed = 0;
+let wsMessagesLastSecond = 0;
+let wsMessageCounter = 0;
+
+setInterval(() => {
+  wsMessagesLastSecond = wsMessageCounter;
+  wsMessageCounter = 0;
+  for (const tracker of wsClientTrackerMap.values()) {
+    tracker.messageCountWindow = Math.max(0, tracker.messageCountWindow - 2);
+    tracker.roomSwitchCountWindow = Math.max(0, tracker.roomSwitchCountWindow - 1);
+  }
+}, 1000);
+
+async function checkWsHeuristics(ws: WebSocket, payloadLength: number, eventType: 'SEND' | 'AUTH' | 'JOIN_ROOM') {
+  const tracker = wsClientTrackerMap.get(ws);
+  if (!tracker) return false;
+
+  const ip = tracker.ip;
+
+  // 1. Check payload oversize
+  const payloadRule = wsHeuristics.find(h => h.id === 'payload_oversize');
+  if (payloadRule && payloadRule.enabled && payloadLength > payloadRule.threshold) {
+    const reason = `Heurística WAF: Frame sobrecargado (${payloadLength} caracteres > ${payloadRule.threshold})`;
+    logWsSecurityEvent('HEURISTIC_TRIGGER', ip, reason, 'critical');
+    await db.banUserAndIP(ip, reason, 'critical', `Payload size: ${payloadLength}`);
+    tracker.status = 'blocked';
+    ws.send(JSON.stringify({ type: "THREAT_BLOCKED", reason, ip }));
+    ws.close();
+    return true;
+  }
+
+  // 2. Check flood attack
+  if (eventType === 'SEND') {
+    tracker.messageCountWindow += 1;
+    const floodRule = wsHeuristics.find(h => h.id === 'flood_attack');
+    if (floodRule && floodRule.enabled && tracker.messageCountWindow > floodRule.threshold) {
+      const reason = `Heurística WAF: Inundación de mensajes WebSocket (${tracker.messageCountWindow} msg en ventana)`;
+      logWsSecurityEvent('AUTO_BAN', ip, reason, 'critical');
+      await db.banUserAndIP(ip, reason, 'critical', `Message window flood: ${tracker.messageCountWindow}`);
+      tracker.status = 'blocked';
+      ws.send(JSON.stringify({ type: "THREAT_BLOCKED", reason, ip }));
+      ws.close();
+      return true;
+    }
+  }
+
+  // 3. Check rapid room hopping
+  if (eventType === 'JOIN_ROOM') {
+    tracker.roomSwitchCountWindow += 1;
+    const roomRule = wsHeuristics.find(h => h.id === 'rapid_room_hopping');
+    if (roomRule && roomRule.enabled && tracker.roomSwitchCountWindow > roomRule.threshold) {
+      const reason = `Heurística WAF: Barrido/cambio acelerado de salas (${tracker.roomSwitchCountWindow} cambios)`;
+      logWsSecurityEvent('AUTO_BAN', ip, reason, 'critical');
+      await db.banUserAndIP(ip, reason, 'critical', `Room switch count: ${tracker.roomSwitchCountWindow}`);
+      tracker.status = 'blocked';
+      ws.send(JSON.stringify({ type: "THREAT_BLOCKED", reason, ip }));
+      ws.close();
+      return true;
+    }
+  }
+
+  return false;
+}
+
 wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
   const ip = req.headers['x-forwarded-for'] ? (req.headers['x-forwarded-for'] as string).split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1';
 
@@ -3093,11 +3380,40 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
     return ws.close();
   }
 
+  const trackerId = "sock-" + crypto.randomUUID();
+  const tracker: WsClientTracker = {
+    id: trackerId,
+    ws,
+    ip,
+    connectedAt: Date.now(),
+    lastPingAt: Date.now(),
+    messageCountWindow: 0,
+    roomSwitchCountWindow: 0,
+    authFailures: 0,
+    status: 'active'
+  };
+  wsClientTrackerMap.set(ws, tracker);
+  logWsSecurityEvent('CONNECT', ip, `Nueva conexión TCP WebSocket iniciada [${trackerId}]`, 'info');
+
+  ws.on("close", () => {
+    wsClientTrackerMap.delete(ws);
+    logWsSecurityEvent('DISCONNECT', ip, `Conexión TCP finalizada [${trackerId}]`, 'info');
+  });
+
   ws.on("message", async (data: string) => {
     try {
-      const msg = JSON.parse(data.toString());
+      const rawString = data.toString();
+      totalWsMessagesProcessed++;
+      wsMessageCounter++;
+
+      // Check heuristics on payload size
+      const isBlocked = await checkWsHeuristics(ws, rawString.length, 'SEND');
+      if (isBlocked) return;
+
+      const msg = JSON.parse(rawString);
 
       if (msg.type === "PING") {
+        tracker.lastPingAt = Date.now();
         ws.send(JSON.stringify({ type: "PONG" }));
         return;
       }
@@ -3105,6 +3421,15 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
       if (msg.type === "AUTHENTICATE") {
         const userId = await getSessionUserId(msg.token);
         if (!userId || !((await db.getUser(userId)) !== null)) {
+          tracker.authFailures++;
+          const authRule = wsHeuristics.find(h => h.id === 'auth_burst');
+          if (authRule && authRule.enabled && tracker.authFailures >= authRule.threshold) {
+            const reason = `Heurística WAF: Ráfaga de fallos de autenticación (${tracker.authFailures} fallos)`;
+            logWsSecurityEvent('AUTO_BAN', ip, reason, 'critical');
+            await db.banUserAndIP(ip, reason, 'critical', `Auth failures: ${tracker.authFailures}`);
+            ws.send(JSON.stringify({ type: "THREAT_BLOCKED", reason, ip }));
+            return ws.close();
+          }
           ws.send(JSON.stringify({ type: "ERROR", message: "Sesión no válida" }));
           return ws.close();
         }
@@ -3114,6 +3439,11 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           ws.send(JSON.stringify({ type: "ERROR", message: "Aether Security: Usuario con estado Baneado" }));
           return ws.close();
         }
+
+        tracker.userId = user.id;
+        tracker.userName = user.name;
+        tracker.userEmail = user.email;
+        tracker.status = 'authenticated';
 
         wsUserMap.set(ws, {
           userId: user.id,
@@ -3137,9 +3467,21 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
       }
 
       if (msg.type === "JOIN_ROOM") {
+        const isBlockedHop = await checkWsHeuristics(ws, rawString.length, 'JOIN_ROOM');
+        if (isBlockedHop) return;
+
         const { roomId } = msg;
-        if (!((await db.getRoom(roomId)) !== null)) {
+        const targetRoom = await db.getRoom(roomId);
+        if (!targetRoom) {
           return ws.send(JSON.stringify({ type: "ERROR", message: "Sala no localizada" }));
+        }
+
+        const roomMode = targetRoom.accessMode || (targetRoom.isClosed ? 'closed' : (targetRoom.isPrivate ? 'open' : 'global'));
+        if (roomMode === 'closed' && targetRoom.createdById !== senderData.userId) {
+          const userObj = await db.getUser(senderData.userId);
+          if (userObj?.role !== 'admin') {
+            return ws.send(JSON.stringify({ type: "ERROR", message: "Esta sala está CERRADA por su creador. No se permiten nuevos miembros." }));
+          }
         }
 
         if (senderData.roomId && roomConnections.has(senderData.roomId)) {
@@ -3147,6 +3489,7 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
         }
 
         senderData.roomId = roomId;
+        tracker.roomId = roomId;
         if (!roomConnections.has(roomId)) {
           roomConnections.set(roomId, new Set());
         }
@@ -3446,7 +3789,7 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
 async function broadcastRoomUsers(roomId: string) {
   const clients = roomConnections.get(roomId);
   if (!clients) return;
-  const usersMap = new Map<string, { id: string; name: string; email: string; role?: string }>();
+  const usersMap = new Map<string, { id: string; name: string; email: string; role?: string; avatar?: string; isPremium?: boolean; ip?: string; status?: string }>();
   for (const client of clients) {
     const u = wsUserMap.get(client);
     if (u) {
@@ -3455,7 +3798,11 @@ async function broadcastRoomUsers(roomId: string) {
         id: u.userId,
         name: u.name,
         email: u.email,
-        role: userObj?.role || 'user'
+        role: userObj?.role || 'user',
+        avatar: userObj?.avatar,
+        isPremium: userObj?.isPremium || false,
+        ip: u.ip,
+        status: userObj?.status || 'Activo'
       });
     }
   }
@@ -3505,7 +3852,7 @@ async function startServer() {
       const now = Date.now();
       const allUsers = await db.getAllUsers();
       for (const u of allUsers) {
-        if (u.isPremium && u.premiumExpiresAt && u.premiumExpiresAt < now) {
+        if (u.isPremium && u.premiumExpiresAt && u.premiumExpiresAt > 0 && u.premiumExpiresAt < now) {
           u.isPremium = false;
           u.premiumExpiresAt = undefined;
           await db.saveUser(u);

@@ -22,6 +22,7 @@ export interface UserProfile {
   isBanned?: boolean;
   isPremium?: boolean;
   premiumExpiresAt?: number;
+  avatar?: string;
   violations?: number;
   infractions?: InfractionLog[];
   banReason?: string;
@@ -45,7 +46,19 @@ export interface ChatRoom {
   createdAt: number;
   isPrivate: boolean;
   isClosed?: boolean;
+  accessMode?: 'open' | 'closed' | 'global';
+  description?: string;
   activeUsersCount: number;
+}
+
+export interface BannedIpDetail {
+  id: string;
+  ip: string;
+  reason: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  bannedBy?: string;
+  timestamp: number;
+  userEmail?: string;
 }
 
 export interface ChatMessage {
@@ -98,6 +111,52 @@ export interface SystemStats {
   threatsDetected: number;
   totalLogs: number;
   cacheHitRatio: number;
+}
+
+export interface WsConnectionClient {
+  id: string;
+  ip: string;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  roomId?: string;
+  connectedAt: number;
+  lastPingAt: number;
+  messageCountWindow: number;
+  roomSwitchCountWindow: number;
+  authFailures: number;
+  status: 'active' | 'authenticated' | 'suspicious' | 'blocked';
+  pingMs?: number;
+}
+
+export interface WsSecurityHeuristicRule {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  threshold: number;
+  unit: string;
+  action: 'WARN' | 'DISCONNECT' | 'AUTO_BAN';
+}
+
+export interface WsMonitorStats {
+  activeSockets: number;
+  authenticatedSockets: number;
+  totalMessagesProcessed: number;
+  messagesPerSecond: number;
+  suspiciousEventsCount: number;
+  autoBlockedIpsCount: number;
+  activeClients: WsConnectionClient[];
+  heuristics: WsSecurityHeuristicRule[];
+  bannedIps: Array<{ ip: string; reason: string; bannedAt: number }>;
+  recentEvents: Array<{
+    id: string;
+    type: 'CONNECT' | 'DISCONNECT' | 'HEURISTIC_TRIGGER' | 'AUTO_BAN' | 'MANUAL_BLOCK' | 'PING';
+    ip: string;
+    detail: string;
+    severity: 'info' | 'warn' | 'alert' | 'critical';
+    timestamp: number;
+  }>;
 }
 
 export interface CustomPreferences {

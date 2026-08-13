@@ -1,6 +1,124 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Strictly Lock Viewport to prevent side scrolling */
+html, body, #root, main {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none !important;
+  touch-action: pan-y !important;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  height: 100%;
+}
+
+/* Force containment on all app containers and main elements */
+.aether-app-bg, #root > div, main {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  touch-action: pan-y !important;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* THEME SYSTEM VARIABLES */
+
+/* 1. DARK SLATE (Default - Slate Premium) */
+.dark, [data-theme="dark"] {
+  --bg-app: #080d1a;
+  --bg-surface: #0f172a;
+  --bg-card: #1e293b;
+  --bg-card-subtle: #131c31;
+  --bg-input: #0b1329;
+  --border-main: rgba(51, 65, 85, 0.7);
+  --border-subtle: rgba(30, 41, 59, 0.9);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --header-bg: rgba(15, 23, 42, 0.92);
+  --modal-bg: rgba(15, 23, 42, 0.96);
+  --shadow-glow: 0 8px 32px rgba(14, 165, 233, 0.12);
+}
+
+/* 2. OLED BLACK (AMOLED Deep Pitch Black) */
+.oled, [data-theme="oled"] {
+  --bg-app: #000000;
+  --bg-surface: #050505;
+  --bg-card: #0c0c0e;
+  --bg-card-subtle: #080808;
+  --bg-input: #050505;
+  --border-main: #262626;
+  --border-subtle: #171717;
+  --text-primary: #ffffff;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --header-bg: rgba(0, 0, 0, 0.96);
+  --modal-bg: rgba(0, 0, 0, 0.98);
+  --shadow-glow: 0 0 20px rgba(255, 255, 255, 0.06);
+}
+
+/* 3. MIDNIGHT NAVY (Royal Sapphire VIP) */
+.midnight, [data-theme="midnight"] {
+  --bg-app: #020617;
+  --bg-surface: #0a1128;
+  --bg-card: #0d1738;
+  --bg-card-subtle: #080e22;
+  --bg-input: #050a1b;
+  --border-main: rgba(30, 58, 138, 0.6);
+  --border-subtle: rgba(30, 41, 89, 0.8);
+  --text-primary: #f0f5ff;
+  --text-secondary: #8ca3d4;
+  --text-muted: #556f9f;
+  --header-bg: rgba(10, 17, 40, 0.92);
+  --modal-bg: rgba(8, 14, 34, 0.96);
+  --shadow-glow: 0 8px 36px rgba(99, 102, 241, 0.22);
+}
+
+/* Dynamic Helper Utility Classes for Reactive Themes */
+.aether-app-bg {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+}
+
+.aether-surface {
+  background-color: var(--bg-surface);
+  border-color: var(--border-main);
+}
+
+.aether-card {
+  background-color: var(--bg-card);
+  border-color: var(--border-main);
+}
+
+.aether-card-subtle {
+  background-color: var(--bg-card-subtle);
+  border-color: var(--border-subtle);
+}
+
+.aether-input {
+  background-color: var(--bg-input);
+  border-color: var(--border-main);
+  color: var(--text-primary);
+}
+
+.aether-header {
+  background-color: var(--header-bg);
+  border-color: var(--border-main);
+}
+
+.aether-modal {
+  background-color: var(--modal-bg);
+  border-color: var(--border-main);
+}
+
 @theme {
   --animate-audio-wave: audio-wave 1.2s ease-in-out infinite;
   --animate-blob: blob 7s infinite;
@@ -48,14 +166,15 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--bg-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
+  background: var(--border-main);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 1);
+  background: var(--text-muted);
 }
+

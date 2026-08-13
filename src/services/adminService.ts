@@ -1,5 +1,5 @@
 import { apiRequest } from './api';
-import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog } from '../types';
+import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail } from '../types';
 
 export const adminService = {
   async getStats(token?: string): Promise<SystemStats> {
@@ -94,6 +94,12 @@ export const adminService = {
 
   async getThreats(token?: string): Promise<ThreatLog[]> {
     return apiRequest<ThreatLog[]>('/api/admin/threats', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  },
+
+  async getBannedIps(token?: string): Promise<BannedIpDetail[]> {
+    return apiRequest<BannedIpDetail[]>('/api/admin/banned-ips', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   },

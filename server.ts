@@ -48,6 +48,7 @@ import compression from "compression";
 const INSTANTDB_APP_ID = "222816e6-294f-4d87-ab1e-6e94aa4e6c74";
 const PORT = 3000;
 const app = express();
+app.set('trust proxy', true);
 app.use(compression());
 app.use(express.json({ limit: "25mb" }));
 
@@ -280,8 +281,9 @@ async function sendPremiumInvoiceEmail(params: {
   months?: number;
   expiresAt?: number;
   reason?: string;
+  planTier?: 'free' | 'premium' | 'cyber_elite';
 }) {
-  const { userEmail, userName, type, months, expiresAt, reason } = params;
+  const { userEmail, userName, type, months, expiresAt, reason, planTier } = params;
   if (!userEmail) return;
 
   const displayName = userName || userEmail.split('@')[0];
@@ -291,27 +293,29 @@ async function sendPremiumInvoiceEmail(params: {
   const m = months && months > 0 ? months : 1;
   const isPaid = type === 'ACTIVATED' || type === 'EXTENDED';
 
-  const basePlanPrice = isPaid ? 9.99 * m : 0;
+  const isCyberElite = planTier === 'cyber_elite' || userEmail.toLowerCase() === 'ydark126@gmail.com';
+  const planName = isCyberElite ? '⚡ Cyber Elite Ultra' : '👑 Aether Premium VIP';
+  const planRate = isCyberElite ? 29.99 : 9.99;
+
+  const basePlanPrice = isPaid ? planRate * m : 0;
   const processingFee = isPaid ? 0.80 : 0;
   const subtotal = basePlanPrice + processingFee;
   const iva = isPaid ? subtotal * 0.16 : 0;
   const grandTotal = subtotal + iva;
 
   let subject = '';
-  let badgeColor = '#10b981';
-  let badgeText = 'PAGADO & ACTIVADO';
+  let badgeColor = isCyberElite ? '#06b6d4' : '#10b981';
+  let badgeText = isCyberElite ? 'CYBER ELITE ULTRA VIP' : 'MEMBRESÍA VIP ACTIVA';
   let statusBanner = '';
 
   if (type === 'ACTIVATED') {
-    subject = `📄 Factura Electrónica y Activación Premium #${invoiceNum}`;
-    badgeColor = '#10b981';
-    badgeText = 'MEMBRESÍA ACTIVA';
-    statusBanner = '¡Confirmación de suscripción Aether Security Pro! Su servicio ha sido habilitado con cifrado prioritario y acceso ilimitado a motores de IA.';
+    subject = `📄 Factura Electrónica y Cobertura ${planName} #${invoiceNum}`;
+    statusBanner = isCyberElite 
+      ? '¡Confirmación de suscripción Cyber Elite Ultra! Su cuenta dispone de nivel de prioridad máxima en la red Aether, cifrado militar, clave maestra y acceso ilimitado a motores de IA y WAF.'
+      : '¡Confirmación de suscripción Aether Security Pro! Su servicio ha sido habilitado con cifrado prioritario y acceso ilimitado a motores de IA.';
   } else if (type === 'EXTENDED') {
-    subject = `📄 Factura Electrónica y Renovación Premium #${invoiceNum}`;
-    badgeColor = '#06b6d4';
-    badgeText = 'SUSCRIPCIÓN RENOVADA';
-    statusBanner = 'El período de cobertura de su suscripción Aether Security Pro ha sido renovado y extendido exitosamente.';
+    subject = `📄 Factura Electrónica y Renovación ${planName} #${invoiceNum}`;
+    statusBanner = `El período de cobertura de su suscripción ${planName} ha sido renovado y extendido exitosamente.`;
   } else if (type === 'REMOVED') {
     subject = `📄 Comprobante de Cancelación de Servicio #${invoiceNum}`;
     badgeColor = '#ef4444';
@@ -321,7 +325,7 @@ async function sendPremiumInvoiceEmail(params: {
     subject = `📄 Notificación de Finalización de Cobertura #${invoiceNum}`;
     badgeColor = '#f59e0b';
     badgeText = 'EXPIRADO';
-    statusBanner = 'El período de vigencia de su membresía Premium ha concluido. Su cuenta ha retornado al nivel de acceso estándar.';
+    statusBanner = 'El período de vigencia de su membresía ha concluido. Su cuenta ha retornado al nivel de acceso estándar.';
   }
 
   const content = `
@@ -341,8 +345,8 @@ async function sendPremiumInvoiceEmail(params: {
         <tbody>
           <tr>
             <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; color: #f8fafc; font-weight: 600; font-size: 13px;">
-              Membresía Aether Security Pro
-              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Cifrado VIP & Motores IA Dedicados</div>
+              Membresía ${planName}
+              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${isCyberElite ? 'Cifrado Máximo, WAF Heurístico & Motores IA Prioritarios' : 'Cifrado VIP & Motores IA Dedicados'}</div>
             </td>
             <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; text-align: center; color: #94a3b8; font-size: 13px;">${isPaid ? `${m} mes${m > 1 ? 'es' : ''}` : '-'}</td>
             <td style="padding: 14px 16px; border-bottom: 1px solid #1e293b; text-align: right; color: #f8fafc; font-weight: 700; font-family: monospace; font-size: 13px;">${basePlanPrice.toFixed(2)}</td>
@@ -386,6 +390,28 @@ async function sendPremiumInvoiceEmail(params: {
   const html = buildAetherEmail(`Comprobante Electrónico #${invoiceNum}`, badgeText, content, badgeColor);
 
   await sendRealEmail(userEmail, subject, html, `${subject} - Total: ${grandTotal.toFixed(2)} USD - Cliente: ${displayName} (${userEmail}) - Vencimiento: ${expiresDateStr}`);
+}
+
+function broadcastUserUpdate(user: any, eventType: string, extraData?: any) {
+  if (!user) return;
+  const formattedUser = formatUserResponse(user);
+  const payload = JSON.stringify({
+    type: "USER_STATE_UPDATE",
+    eventType,
+    userId: user.id || user._id,
+    user: formattedUser,
+    ...extraData
+  });
+
+  if (wss && wss.clients) {
+    wss.clients.forEach((client: any) => {
+      if (client.readyState === 1) {
+        try {
+          client.send(payload);
+        } catch (e) {}
+      }
+    });
+  }
 }
 
 // Server-side Gemini AI setup
@@ -706,14 +732,18 @@ interface UserRecord {
   createdAt: number;
   isBanned: boolean;
   isPremium?: boolean;
+  planTier?: 'free' | 'premium' | 'cyber_elite';
   premiumExpiresAt?: number;
   avatar?: string;
+  statusMood?: string;
+  bio?: string;
   violations?: number;
   infractions?: InfractionRecord[];
   banReason?: string;
   banSeverity?: 'low' | 'medium' | 'high' | 'critical';
   banEvidence?: string;
   bannedAt?: number;
+  ipWhitelist?: string[];
 }
 
 interface RoomRecord {
@@ -739,6 +769,12 @@ interface MessageRecord {
   replyTo?: any;
   reactions?: Array<{emoji: string, senderName: string}>;
   selfDestruct?: number;
+  isPinned?: boolean;
+  poll?: any;
+  format?: string;
+  codeLanguage?: string;
+  readBy?: string[];
+  status?: string;
   time: string;
   timestamp: number;
 }
@@ -768,7 +804,9 @@ interface SecurityLogRecord {
   suspicious: boolean;
 }
 
-import { UserModel, RoomModel, MessageModel, ThreatModel, SecurityLogModel, BannedIPModel, SessionModel } from './src/db/models.js';
+import { UserModel, RoomModel, MessageModel, ThreatModel, SecurityLogModel, BannedIPModel, SessionModel, ForensicCaseModel } from './src/db/models.js';
+
+const MASTER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "ydark126@gmail.com").toLowerCase();
 
 async function getSessionUserId(token: string): Promise<string | null> {
   if (!token) return null;
@@ -832,13 +870,25 @@ class DatabaseStore {
     const doc = await (UserModel as any).findOne({ id: id } as any);
     if (!doc) return null;
     const obj = doc.toObject ? doc.toObject() : doc;
-    return {
+    const u = {
       ...obj,
       name: this.decryptStringIfNeeded(obj.name),
       ip: this.decryptStringIfNeeded(obj.ip),
       banReason: this.decryptStringIfNeeded(obj.banReason),
       banEvidence: this.decryptStringIfNeeded(obj.banEvidence)
     };
+    if (u.role === "admin" || (u.email && u.email.toLowerCase() === MASTER_ADMIN_EMAIL)) {
+      u.isPremium = true;
+      if (!u.planTier || u.planTier === 'free') u.planTier = 'cyber_elite';
+    } else if (u.isPremium && u.premiumExpiresAt && u.premiumExpiresAt > 0 && u.premiumExpiresAt <= Date.now()) {
+      u.isPremium = false;
+      u.planTier = 'free';
+      u.premiumExpiresAt = undefined;
+    } else {
+      u.isPremium = !!u.isPremium;
+      if (!u.planTier) u.planTier = u.isPremium ? 'premium' : 'free';
+    }
+    return u;
   }
 
   async getUserByEmail(email: string) {
@@ -846,13 +896,25 @@ class DatabaseStore {
     const doc = await (UserModel as any).findOne({ email: clean } as any);
     if (!doc) return null;
     const obj = doc.toObject ? doc.toObject() : doc;
-    return {
+    const u = {
       ...obj,
       name: this.decryptStringIfNeeded(obj.name),
       ip: this.decryptStringIfNeeded(obj.ip),
       banReason: this.decryptStringIfNeeded(obj.banReason),
       banEvidence: this.decryptStringIfNeeded(obj.banEvidence)
     };
+    if (u.role === "admin" || (u.email && u.email.toLowerCase() === MASTER_ADMIN_EMAIL)) {
+      u.isPremium = true;
+      if (!u.planTier || u.planTier === 'free') u.planTier = 'cyber_elite';
+    } else if (u.isPremium && u.premiumExpiresAt && u.premiumExpiresAt > 0 && u.premiumExpiresAt <= Date.now()) {
+      u.isPremium = false;
+      u.planTier = 'free';
+      u.premiumExpiresAt = undefined;
+    } else {
+      u.isPremium = !!u.isPremium;
+      if (!u.planTier) u.planTier = u.isPremium ? 'premium' : 'free';
+    }
+    return u;
   }
 
   async saveUser(user: any) {
@@ -973,7 +1035,56 @@ class DatabaseStore {
   }
 
   async saveMessage(msg: any) {
-    await (MessageModel as any).create(msg);
+    try {
+      await (MessageModel as any).create(msg);
+    } catch (e) {
+      console.error("Error saving message:", e);
+    }
+  }
+
+  async updateMessagePoll(messageId: string, poll: any) {
+    try {
+      await (MessageModel as any).updateOne({ id: messageId }, { $set: { poll } });
+    } catch (e) {
+      console.error("Error updating message poll:", e);
+    }
+  }
+
+  async updateMessagePin(messageId: string, isPinned: boolean) {
+    try {
+      await (MessageModel as any).updateOne({ id: messageId }, { $set: { isPinned } });
+    } catch (e) {
+      console.error("Error updating message pin:", e);
+    }
+  }
+
+  async deleteMessage(messageId: string) {
+    try {
+      await (MessageModel as any).deleteOne({ id: messageId });
+    } catch (e) {
+      console.error("Error deleting message:", e);
+    }
+  }
+
+  async markMessagesRead(roomId: string, userId: string): Promise<string[]> {
+    try {
+      const unreadDocs = await (MessageModel as any).find({
+        roomId: roomId,
+        senderId: { $ne: userId },
+        readBy: { $ne: userId }
+      }).select('id');
+      const ids = unreadDocs.map((d: any) => d.id);
+      if (ids.length > 0) {
+        await (MessageModel as any).updateMany(
+          { roomId: roomId, senderId: { $ne: userId } },
+          { $addToSet: { readBy: userId } }
+        );
+      }
+      return ids;
+    } catch (e) {
+      console.error("Error marking messages read:", e);
+      return [];
+    }
   }
 
   async addBannedIP(ip: string, reason?: string, severity?: string, bannedBy?: string) {
@@ -994,11 +1105,13 @@ class DatabaseStore {
 
   async removeBannedIP(ip: string) {
     const cleanIp = ip ? ip.trim() : '';
+    if (!cleanIp) return;
     await (BannedIPModel as any).deleteOne({ ip: cleanIp } as any);
   }
 
   async isIpBanned(ip: string) {
     const cleanIp = ip ? ip.trim() : '';
+    if (!cleanIp || cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost') return false;
     return (await (BannedIPModel as any).findOne({ ip: cleanIp } as any)) !== null;
   }
 
@@ -1098,13 +1211,71 @@ class DatabaseStore {
   async getBannedIPsCount() { return await (BannedIPModel as any).countDocuments(); }
   async getThreatsCount() { return await (ThreatModel as any).countDocuments(); }
   async getSecurityLogsCount() { return await (SecurityLogModel as any).countDocuments(); }
+  async getForensicCasesCount() { return await (ForensicCaseModel as any).countDocuments(); }
+
+  async addForensicCase(caseData: {
+    id: string;
+    roomId: string;
+    roomName: string;
+    offenderUserId: string;
+    offenderEmail: string;
+    offenderName: string;
+    offenderIp: string;
+    lawArticles: string[];
+    violationSummary: string;
+    evidenceSnippet: string;
+    fullTranscript: string;
+    messagesJson: any[];
+    usersExpelledCount?: number;
+  }) {
+    try {
+      const doc = await (ForensicCaseModel as any).create({
+        ...caseData,
+        timestamp: Date.now(),
+        status: 'seized_and_banned',
+        usersExpelledCount: caseData.usersExpelledCount || 0
+      });
+      return doc;
+    } catch (err) {
+      console.error("[FORENSIC CASE SAVE ERROR]", err);
+      return null;
+    }
+  }
+
+  async getAllForensicCases() {
+    try {
+      const docs = await (ForensicCaseModel as any).find().sort({ timestamp: -1 });
+      return docs.map((d: any) => {
+        const obj = d.toObject ? d.toObject() : d;
+        return {
+          ...obj,
+          offenderEmail: this.decryptStringIfNeeded(obj.offenderEmail),
+          offenderIp: this.decryptStringIfNeeded(obj.offenderIp),
+          offenderName: this.decryptStringIfNeeded(obj.offenderName)
+        };
+      });
+    } catch (err) {
+      console.error("[FORENSIC CASES GET ERROR]", err);
+      return [];
+    }
+  }
+
+  async deleteForensicCase(caseId: string) {
+    try {
+      await (ForensicCaseModel as any).deleteOne({ id: caseId });
+      return true;
+    } catch (err) {
+      console.error("[FORENSIC CASE DELETE ERROR]", err);
+      return false;
+    }
+  }
   
   isDirty = false;
   saveDatabase() {}
 
   public async ensureMasterAdmin() {
     try {
-      const email = "ydark126@gmail.com";
+      const email = MASTER_ADMIN_EMAIL;
       const masterUser = await this.getUserByEmail(email);
       const adminPassHash = this.hashPassword("Admin123");
 
@@ -1113,25 +1284,30 @@ class DatabaseStore {
           id: "admin-master-101",
           email: email,
           passwordHash: adminPassHash,
-          name: "YDark Admin",
-          ip: "127.0.0.1",
+          name: "Aether Master Admin",
+          ip: "200.70.47.11",
+          ipWhitelist: ["200.70.47.11"],
           role: "admin",
           status: "Activo",
           isVerified: true,
           isPremium: true,
+          planTier: "cyber_elite",
           createdAt: Date.now(),
           isBanned: false
         });
-        console.log("[ADMIN SYNC] Master admin ydark126@gmail.com creado exitosamente con clave Admin123.");
+        console.log(`[ADMIN SYNC] Master admin ${email} creado exitosamente con clave Admin123 e IP 200.70.47.11.`);
       } else {
         masterUser.role = "admin";
         masterUser.status = "Activo";
         masterUser.isBanned = false;
         masterUser.isVerified = true;
         masterUser.isPremium = true;
+        masterUser.planTier = "cyber_elite";
         masterUser.passwordHash = adminPassHash;
+        masterUser.ip = "200.70.47.11";
+        masterUser.ipWhitelist = ["200.70.47.11"];
         await this.saveUser(masterUser);
-        console.log("[ADMIN SYNC] Master admin ydark126@gmail.com sincronizado exitosamente (Clave: Admin123, Rol: admin, Estado: Activo).");
+        console.log(`[ADMIN SYNC] Master admin ${email} sincronizado exitosamente (IP: 200.70.47.11, Plan: cyber_elite).`);
       }
     } catch (err) {
       console.error("[ADMIN SYNC ERROR]", err);
@@ -1151,13 +1327,16 @@ class DatabaseStore {
     const adminId = "admin-master-101";
     await this.saveUser({
       id: adminId,
-      email: "ydark126@gmail.com",
+      email: MASTER_ADMIN_EMAIL,
       passwordHash: this.hashPassword("Admin123"),
-      name: "YDark Admin",
-      ip: "127.0.0.1",
+      name: "Aether Master Admin",
+      ip: "200.70.47.11",
+      ipWhitelist: ["200.70.47.11"],
       role: "admin",
       status: "Activo",
       isVerified: true,
+      isPremium: true,
+      planTier: "cyber_elite",
       createdAt: Date.now(),
       isBanned: false
     });
@@ -1255,25 +1434,218 @@ class DatabaseStore {
 const db = new DatabaseStore();
 
 // Client IP helper
-function getClientIP(req: express.Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
-    return forwarded.split(',')[0].trim();
+function normalizeIp(ip: string): string {
+  if (!ip) return '';
+  let clean = ip.trim();
+  if (clean.startsWith('::ffff:')) clean = clean.substring(7);
+  if (clean === '::1' || clean === 'localhost') return '127.0.0.1';
+  return clean;
+}
+
+function isInternalOrLoopbackIp(ip: string): boolean {
+  const norm = normalizeIp(ip);
+  if (!norm || norm === '127.0.0.1' || norm === '::1' || norm === 'localhost') return true;
+  if (norm.startsWith('10.') || norm.startsWith('169.254.') || norm.startsWith('192.168.') || norm.startsWith('172.16.') || norm.startsWith('172.17.') || norm.startsWith('172.18.') || norm.startsWith('172.19.') || norm.startsWith('172.20.') || norm.startsWith('172.21.') || norm.startsWith('172.22.') || norm.startsWith('172.23.') || norm.startsWith('172.24.') || norm.startsWith('172.25.') || norm.startsWith('172.26.') || norm.startsWith('172.27.') || norm.startsWith('172.28.') || norm.startsWith('172.29.') || norm.startsWith('172.30.') || norm.startsWith('172.31.')) return true;
+  return false;
+}
+
+function checkIsIpWhitelisted(reqIp: string, whitelist: string[], userCurrentIp?: string): boolean {
+  if (!Array.isArray(whitelist) || whitelist.length === 0) return true;
+
+  const normReq = normalizeIp(reqIp);
+
+  // Always allow container loopback & internal proxy addresses
+  if (isInternalOrLoopbackIp(normReq)) return true;
+
+  // Always match the user's recorded login/session IP
+  if (userCurrentIp && normalizeIp(userCurrentIp) === normReq) return true;
+
+  for (const entry of whitelist) {
+    const normEntry = normalizeIp(entry);
+    if (!normEntry) continue;
+    if (normEntry === normReq) return true;
+    if (normEntry.endsWith('.*')) {
+      const prefix = normEntry.slice(0, -2);
+      if (normReq.startsWith(prefix + '.')) return true;
+    }
   }
-  return req.socket.remoteAddress || '127.0.0.1';
+
+  return false;
+}
+
+function getClientIP(req: express.Request): string {
+  const forwarded = req.headers['x-forwarded-for'] || req.headers['x-real-ip'];
+  if (typeof forwarded === 'string') {
+    return normalizeIp(forwarded.split(',')[0]);
+  }
+  if (Array.isArray(forwarded)) {
+    return normalizeIp(forwarded[0]);
+  }
+  return normalizeIp(req.ip || req.socket.remoteAddress || '127.0.0.1');
+}
+
+// Advanced AI & Heuristic Anti-VPN / Anti-Proxy Engine (AetherSentinel AI)
+const vpnDetectionCache = new Map<string, { detected: boolean; providerType: string; confidenceScore: number; reason: string; timestamp: number }>();
+
+function heuristicVpnCheck(req: express.Request): { detected: boolean; reason?: string; score: number } {
+  let score = 0;
+  const reasons: string[] = [];
+  const ip = getClientIP(req);
+
+  // 1. Loopback & Local check (never flag local/private IPs or cloud ingress load balancers)
+  if (isInternalOrLoopbackIp(ip)) {
+    return { detected: false, score: 0 };
+  }
+
+  // 2. Suspicious proxy headers inspection
+  const proxyHeaders = ['x-proxyuser-ip', 'x-proxy-id', 'via', 'x-forwarded-server', 'x-forwarded-host', 'forwarded'];
+  for (const h of proxyHeaders) {
+    if (req.headers[h]) {
+      score += 25;
+      reasons.push(`Cabecera proxy detectada (${h})`);
+    }
+  }
+
+  // 3. Hop count analysis in x-forwarded-for (> 6 hops is suspicious)
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string') {
+    const hops = forwardedFor.split(',').map(h => h.trim());
+    if (hops.length >= 6) {
+      score += 35;
+      reasons.push(`Múltiples saltos de red en X-Forwarded-For (${hops.length} saltos)`);
+    }
+  }
+
+  // 4. User-Agent heuristics (headless, curl, python-requests, suspicious toolsets)
+  const ua = (req.headers['user-agent'] || '').toLowerCase();
+  if (!ua || ua.length < 5 || ua.includes('curl') || ua.includes('python') || ua.includes('postman') || ua.includes('axios') || ua.includes('puppeteer') || ua.includes('selenium') || ua.includes('tor')) {
+    score += 40;
+    reasons.push(`User-Agent sospechoso / Automatizado (${ua.substring(0, 40) || 'Vacío'})`);
+  }
+
+  // 5. Datacenter / Known VPN provider subnet heuristics
+  if (ip.startsWith('3.') || ip.startsWith('34.') || ip.startsWith('52.') || ip.startsWith('104.') || ip.startsWith('159.65.') || ip.startsWith('178.62.')) {
+    score += 25;
+    reasons.push(`Rango IP asociado a Proveedor Cloud / Datacenter (${ip})`);
+  }
+
+  return {
+    detected: score >= 65,
+    reason: reasons.join(' | ') || 'Anomalía de red detectada',
+    score
+  };
+}
+
+async function analyzeVpnOrProxyWithAI(ip: string, headers: any, heuristicResult: any): Promise<{ detected: boolean; providerType: string; confidenceScore: number; reason: string }> {
+  const cacheKey = ip;
+  const cached = vpnDetectionCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < 3600000)) { // 1 hour cache
+    return cached;
+  }
+
+  try {
+    const prompt = `Actúa como SISTEMA DE INTELIGENCIA ARTIFICIAL AVANZADA Y ANÁLISIS DE TELEMETRÍA DE RED (AetherSentinel AI).
+Evalúa si la siguiente conexión HTTP proviene de una VPN comercial, Proxy, Nodo Tor, o Red de Anonimización (Residential Proxy):
+- IP Origen: ${ip}
+- Puntuación Heurística Interna: ${heuristicResult.score}/100
+- Razones Heurísticas: ${heuristicResult.reason}
+- Cabeceras HTTP Clave: ${JSON.stringify({
+  'user-agent': headers['user-agent'],
+  'accept-language': headers['accept-language'],
+  'sec-ch-ua': headers['sec-ch-ua'],
+  'via': headers['via'],
+  'x-forwarded-for': headers['x-forwarded-for']
+})}
+
+CRITERIOS DE CLASIFICACIÓN:- "commercial_vpn": NordVPN, ExpressVPN, Surfshark, Mullvad, etc.- "datacenter_proxy": AWS, DigitalOcean, Hetzner, OVH, VPNs basadas en servidores cloud.- "tor_node": Red de onion routing Tor.- "residential_proxy": Proxies residenciales rotativos (Luminati, Oxylabs, etc.).- "clean": Tráfico legítimo de usuario final o infraestructura cloud oficial.
+
+Devuelve EXCLUSIVAMENTE un JSON estricto sin markdown:
+{
+  "isVpnOrProxy": boolean,
+  "providerType": "commercial_vpn" | "datacenter_proxy" | "tor_node" | "residential_proxy" | "clean",
+  "confidenceScore": number (0 a 100),
+  "reason": "Explicación técnica detallada"
+}`;
+
+    const res = await queryMultiModelText(prompt, "Eres AetherSentinel AI, el motor de ciberseguridad y detección de proxys y VPNs en tiempo real.", true);
+    if (res && res.text) {
+      const cleanJson = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+      const result = {
+        detected: !!parsed.isVpnOrProxy && (parsed.confidenceScore >= 80),
+        providerType: parsed.providerType || 'clean',
+        confidenceScore: parsed.confidenceScore || 0,
+        reason: parsed.reason || 'Análisis IA completado',
+        timestamp: Date.now()
+      };
+      vpnDetectionCache.set(cacheKey, result);
+      return result;
+    }
+  } catch (err) {
+    console.error("Error en detección AI de VPN/Proxy:", err);
+  }
+
+  const fallbackResult = {
+    detected: heuristicResult.detected && heuristicResult.score >= 70,
+    providerType: heuristicResult.detected ? 'commercial_vpn' : 'clean',
+    confidenceScore: heuristicResult.score,
+    reason: heuristicResult.reason || 'Detección por heurística avanzada',
+    timestamp: Date.now()
+  };
+  vpnDetectionCache.set(cacheKey, fallbackResult);
+  return fallbackResult;
 }
 
 // IP Ban Enforcement Middleware
 app.use(async (req, res, next) => {
   const ip = getClientIP(req);
+  if (isInternalOrLoopbackIp(ip)) {
+    return next();
+  }
   if ((await db.isIpBanned(ip))) {
     db.logSecurityEvent(ip, "ACCESS_DENIED", undefined, "Petición denegada por IP bloqueada", true);
     return res.status(403).json({
       error: "Acceso restringido",
-      message: "Aether Security: Tu dirección IP no tiene permisos para acceder a esta plataforma.",
+      message: "Aether Security: Tu dirección IP se encuentra bloqueada en la lista negra de la plataforma.",
       ip
     });
   }
+  next();
+});
+
+// Helper for backward compatibility with WebSocket VPN checks
+function isVpnOrProxy(req: express.Request): { detected: boolean; reason?: string } {
+  const h = heuristicVpnCheck(req);
+  return { detected: h.detected, reason: h.reason };
+}
+
+// Anti-VPN & Proxy Advanced AI Detection Middleware
+app.use(async (req, res, next) => {
+  const ip = getClientIP(req);
+  if (isInternalOrLoopbackIp(ip)) {
+    return next();
+  }
+
+  // Bypass exemptions for static assets or health checks
+  if (req.path.startsWith('/assets') || req.path === '/api/health') {
+    return next();
+  }
+
+  const heuristic = heuristicVpnCheck(req);
+  if (heuristic.score >= 35) {
+    const aiCheck = await analyzeVpnOrProxyWithAI(ip, req.headers, heuristic);
+    if (aiCheck.detected) {
+      console.log(`[AETHER SENTINEL AI] ⛔ VPN/Proxy detectado para IP ${ip}: ${aiCheck.reason} (Confianza: ${aiCheck.confidenceScore}%, Tipo: ${aiCheck.providerType})`);
+      db.logSecurityEvent(ip, "VPN_PROXY_BLOCKED", undefined, `Conexión bloqueada por Anti-VPN / Anti-Proxy AI. Tipo: ${aiCheck.providerType}. Razón: ${aiCheck.reason}`, true);
+      return res.status(403).json({
+        error: "Aether Security: Conexión Anónima / VPN Bloqueada",
+        message: `El sistema de inteligencia artificial AetherSentinel ha detectado el uso de ${aiCheck.providerType === 'tor_node' ? 'Nodo Tor' : aiCheck.providerType === 'commercial_vpn' ? 'VPN Comercial' : 'Proxy de red anónima'}. Desactiva tu VPN o proxy para acceder a la plataforma.`,
+        providerType: aiCheck.providerType,
+        confidence: aiCheck.confidenceScore
+      });
+    }
+  }
+
   next();
 });
 
@@ -1293,8 +1665,25 @@ async function authenticateToken(req: express.Request, res: express.Response, ne
     return res.status(401).json({ error: "Sesión expirable o inválida" });
   }
 
-  if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(user.ip))) {
+  if (user.isBanned || user.status === 'Sancionado' || user.status === 'Baneado') {
     return res.status(403).json({ error: "Aether Security: Cuenta con estado Baneado." });
+  }
+
+  if (user.ip && (await db.isIpBanned(user.ip))) {
+    return res.status(403).json({ error: "Aether Security: Dirección IP bloqueada." });
+  }
+
+  // IP Whitelist Check (allowed endpoints like ip-whitelist management or /api/auth/me skip the restriction)
+  const isExemptEndpoint = req.path === '/api/users/ip-whitelist' || req.path === '/api/auth/me';
+  if (!isExemptEndpoint && Array.isArray(user.ipWhitelist) && user.ipWhitelist.length > 0) {
+    const reqIp = getClientIP(req);
+    if (!checkIsIpWhitelisted(reqIp, user.ipWhitelist, user.ip)) {
+      db.logSecurityEvent(reqIp, "UNAUTHORIZED_IP_ACCESS", user.email, `Acceso bloqueado por Lista Blanca de IPs (${reqIp} no autorizada)`, true);
+      return res.status(403).json({
+        error: `Aether Security: Acceso restringido. Tu dirección IP (${reqIp}) no se encuentra registrada en la Lista Blanca de esta cuenta.`,
+        unauthorizedIp: reqIp
+      });
+    }
   }
 
   (req as any).user = user;
@@ -1307,7 +1696,7 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
   const user = (req as any).user as UserRecord;
   const token = (req as any).token as string;
 
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.email?.toLowerCase() !== MASTER_ADMIN_EMAIL)) {
     return res.status(403).json({ error: "Requiere permisos de perfil de administración" });
   }
 
@@ -1539,67 +1928,94 @@ async function handleUserInfractionAndNotify(
   }
 }
 
-// AI WAF Scan Helper
+// AI WAF Scan Helper with Argentine Penal Code & Cyber-Crime Auditing
 async function analyzeTrafficWithAI(ip: string, userEmail: string | undefined, payloadStr: string, contextType: string, autoBan: boolean = true) {
   if (!payloadStr || payloadStr.trim().length === 0) {
-    return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
+    return { blocked: false, isIllegalArgLaw: false, lawArticles: [] as string[], reason: undefined, severity: undefined, evidence: undefined };
   }
 
   // Fast-path for common benign greetings, normal chat, audio labels
-  const benignPattern = /^(hola|hola!|buenas|buenos días|buenas noches|qué tal|probando|test|hola bot|@bot|\/bot|\[audio de voz.*\]|\[adjuntos:.*\])$/i;
+  const benignPattern = /^(hola|hola!|buenas|buenos días|buenas noches|qué tal|cómo estás|saludos|probando|test|hola bot|@bot|\/bot|\[audio de voz.*\]|\[adjuntos:.*\])$/i;
   if (benignPattern.test(payloadStr.trim())) {
-    return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
+    return { blocked: false, isIllegalArgLaw: false, lawArticles: [] as string[], reason: undefined, severity: undefined, evidence: undefined };
   }
 
   // Do not inspect encrypted blobs (iv:...) as SQL injection
   if (/^[a-f0-9]{32}:[a-f0-9]+$/i.test(payloadStr.trim())) {
-    return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
+    return { blocked: false, isIllegalArgLaw: false, lawArticles: [] as string[], reason: undefined, severity: undefined, evidence: undefined };
   }
 
   const sqlPattern = /('|--|union\s+select|select\s+.*\s+from|insert\s+into|drop\s+table|alter\s+table|<script>|javascript:|eval\(|exec\()/i;
   const ddosPattern = payloadStr.length > 50000;
 
   if (sqlPattern.test(payloadStr) || ddosPattern) {
-    const reason = ddosPattern ? "Comportamiento anómalo en transmisión de datos" : "Petición no autorizada detectada en payload";
-    const evidence = `Payload: ${payloadStr.slice(0, 100)}...`;
+    const reason = ddosPattern ? "Comportamiento anómalo en transmisión de datos (DDoS/Buffer Overflow)" : "Inyección de código / Exploit SQLi detectado";
+    const evidence = `Payload: ${payloadStr.slice(0, 150)}...`;
     if (autoBan) db.banUserAndIP(ip, reason, "critical", evidence);
-    return { blocked: true, reason, severity: "critical" as const, evidence };
+    return { blocked: true, isIllegalArgLaw: true, lawArticles: ["Art. 183 C.P. (Daño Informático)", "Ley 26.388 (Delitos Informáticos)"], reason, severity: "critical" as const, evidence };
   }
 
   try {
-    const prompt = `Actúa como "Aether WAF Guard & Moderación IA", responsable de auditoría técnica.
-Analiza detenidamente la siguiente actividad o mensaje de usuario:
-- IP: ${ip}
+    const prompt = `Actúa como AUDITOR FORENSE DE SEGURIDAD E INTELIGENCIA ARTIFICIAL bajo la legislación de la REPÚBLICA ARGENTINA (Código Penal de la Nación Argentina y Leyes Especiales).
+
+Evalúa el siguiente contenido o mensaje en tiempo real:
+- IP Origen: ${ip}
 - Email: ${userEmail || 'Anónimo'}
 - Contexto: ${contextType}
-- Contenido: "${payloadStr.slice(0, 2000)}"
+- Contenido a examinar: "${payloadStr.slice(0, 2500)}"
 
-REGLAS ABSOLUTAS DE PERMISIVIDAD Y NO-SANCIONABILIDAD:
-1. Saludos cotidianos ("Hola", "Buenas", "Qué tal"), mensajes inocentes, chistes, conversaciones informales, notas de voz normales y preguntas NO SON AMENAZAS.
-2. Jamás sancionar o bloquear mensajes comunes o audios como "Hola". 'isThreat' DEBE SER 'false'.
-3. 'isThreat' solo debe ser 'true' en casos extremadamente graves y explícitos de:
-   - Inyección activa de malware, ransomware, exploits SQLi/XSS/DDoS.
-   - Venta explícita de drogas o armas.
-   - Material de abuso infantil (CSAM).
-   - Amenazas directas de muerte o terrorismo.
-4. Si tienes cualquier duda o es una conversación normal, 'isThreat' DEBE SER 'false'.
+CRITERIOS LEGALES DE TIPIFICACIÓN SEGÚN LEY ARGENTINA:
+1. DELITOS CONTRA LA INTEGRIDAD SEXUAL Y MENORES:
+   - Art. 131 C.P. (Grooming / Acoso sexual a menores por medios digitales).
+   - Art. 128 C.P. (Producción, distribución o tenencia de material de abuso/pornografía infantil).
+2. NARCOTRÁFICO Y ESTUPEFACIENTES:
+   - Ley 23.737 (Comercialización, distribución o facilitación de estupefacientes).
+3. DELITOS INFORMÁTICOS Y ESTAFAS:
+   - Art. 173 inc. 15 y 16 C.P. (Fraude con tarjetas, clonación, carding, phishing, estafas bancarias).
+   - Art. 183 / 153 bis C.P. / Ley 26.388 (Acceso ilegítimo, malware, ransomware, botnets).
+4. DELITOS CONTRA LAS PERSONAS Y ARMAS:
+   - Art. 149 bis / 168 C.P. (Amenazas de muerte, extorsión, sicariato, intimidación pública).
+   - Art. 189 bis C.P. (Tráfico ilegal de armas de fuego o explosivos).
 
-Responde ÚNICAMENTE en un objeto JSON válido sin bloques markdown ni texto adicional:
+REGLAS DE PROTECCIÓN A USUARIOS LEGÍTIMOS:
+- Conversaciones coloquiales, bromas, debates de opinión, discusiones cotidianas, saludos o notas NO SON DELITOS. 'isIllegalArgLaw' y 'isThreat' DEBEN SER 'false'.
+- Solo activa 'isIllegalArgLaw: true' ante delitos comprobables o intenciones criminales explícitas tipificadas en las leyes argentinas arriba citadas.
+
+Devuelve EXCLUSIVAMENTE un JSON estricto sin markdown:
 {
   "isThreat": boolean,
+  "isIllegalArgLaw": boolean,
+  "lawArticles": string[],
   "severity": "low" | "medium" | "high" | "critical",
-  "reason": "Motivo conciso en español",
-  "evidence": "Texto o fragmento exacto"
+  "reason": "Descripción precisa del ilícito bajo la ley argentina",
+  "evidence": "Texto o fragmento exacto incriminatorio"
 }`;
 
-    const res = await queryMultiModelText(prompt, "Eres AETHER WAF GUARD & Moderación IA Superior.", true);
+    const res = await queryMultiModelText(prompt, "Eres el Auditor Forense Judicial IA bajo legislación de la República Argentina.", true);
     if (res && res.text) {
       try {
         const cleanJson = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(cleanJson);
-        if (parsed.isThreat) {
-          if (autoBan) db.banUserAndIP(ip, parsed.reason, parsed.severity || "high", parsed.evidence || "Análisis automatizado (" + res.provider + ")");
-          return { blocked: true, reason: parsed.reason, severity: parsed.severity || "high", evidence: parsed.evidence || payloadStr.slice(0, 100) };
+        if (parsed.isThreat || parsed.isIllegalArgLaw) {
+          const lawArticles = Array.isArray(parsed.lawArticles) && parsed.lawArticles.length > 0 
+            ? parsed.lawArticles 
+            : ["Código Penal Argentino / Ley de Delitos Informáticos"];
+          const reason = parsed.reason || "Violación de leyes penales de la República Argentina detectada por IA";
+          const evidence = parsed.evidence || payloadStr.slice(0, 150);
+          const severity = parsed.severity || "critical";
+
+          if (autoBan) {
+            db.banUserAndIP(ip, reason, severity, evidence);
+          }
+
+          return { 
+            blocked: true, 
+            isIllegalArgLaw: !!parsed.isIllegalArgLaw || severity === 'critical', 
+            lawArticles, 
+            reason, 
+            severity, 
+            evidence 
+          };
         }
       } catch (e) {
         // Continue
@@ -1609,11 +2025,11 @@ Responde ÚNICAMENTE en un objeto JSON válido sin bloques markdown ni texto adi
     // Fail safe
   }
 
-  return { blocked: false, reason: undefined, severity: undefined, evidence: undefined };
+  return { blocked: false, isIllegalArgLaw: false, lawArticles: [] as string[], reason: undefined, severity: undefined, evidence: undefined };
 }
 
 // ==========================================
-// ASYNCHRONOUS MODERATION QUEUE WORKER
+// ASYNCHRONOUS MODERATION QUEUE WORKER (BACKGROUND AI RUNNER)
 // ==========================================
 interface ModerationJob {
   msgId: string;
@@ -1646,10 +2062,157 @@ async function processModerationQueue() {
     try {
       if (!job.payloadToAnalyze || job.payloadToAnalyze.trim().length === 0) continue;
 
-      const threatCheck = await analyzeTrafficWithAI(job.senderIp, job.senderEmail, job.payloadToAnalyze, "MENSAJE_CHAT_E2E_VERIFICADO", false);
+      const threatCheck = await analyzeTrafficWithAI(job.senderIp, job.senderEmail, job.payloadToAnalyze, "AUDITORIA_SEGUNDO_PLANO_SALA", false);
 
       if (threatCheck.blocked) {
-        // Delete blocked message from room history
+        const user = await db.getUser(job.senderUserId);
+        const room = await db.getRoom(job.roomId);
+        const roomName = room ? room.name : `Sala-${job.roomId.substring(0, 8)}`;
+        const allMessages = (await db.getMessages(job.roomId)) || [];
+
+        // If illegal under Argentine Law or Critical Threat -> FULL FORENSIC SEIZURE WORKFLOW
+        if (threatCheck.isIllegalArgLaw || threatCheck.severity === 'critical' || threatCheck.severity === 'high') {
+          console.warn(`[FORENSIC SEIZURE TRIGGERED] Sala ${job.roomId} (${roomName}) detectada con actividad ilegal bajo Ley Argentina por usuario ${job.senderEmail} (${job.senderIp})`);
+
+          // 1. Compile full judicial transcript dossier
+          const transcriptLines: string[] = [
+            `================================================================================`,
+            `          ACTA DE AUDITORÍA FORENSE JUDICIAL - AETHER NETWORK                   `,
+            `       DIRECCIÓN DE CIBERSEGURIDAD Y CUMPLIMIENTO PENAL (REPÚBLICA ARGENTINA)   `,
+            `================================================================================`,
+            `FECHA Y HORA (UTC): ${new Date().toISOString()} (${new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })} ART)`,
+            `EXPEDIENTE FORENSE ID: CS-ARG-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+            `SALA INCAUTADA: ${roomName} (ID: ${job.roomId}, Código: ${room?.code || 'N/A'})`,
+            `CREADA POR: ${room?.createdByName || 'N/A'} (ID: ${room?.createdById || 'N/A'})`,
+            ``,
+            `DATOS DEL INFRACTOR PRINCIPAL:`,
+            `- Nombre de Usuario: ${user ? user.name : 'Desconocido'}`,
+            `- Cuenta Gmail: ${job.senderEmail || user?.email || 'N/A'}`,
+            `- Dirección IP Origen: ${job.senderIp}`,
+            `- ID de Cuenta: ${job.senderUserId}`,
+            ``,
+            `TIPIFICACIÓN LEGAL (CÓDIGO PENAL DE LA NACIÓN ARGENTINA):`,
+            ...threatCheck.lawArticles.map(art => `  ⚖️ ${art}`),
+            ``,
+            `MOTIVO DE LA CLAUSURA: ${threatCheck.reason}`,
+            `EVIDENCIA FLAGRANTE: ${threatCheck.evidence || job.payloadToAnalyze}`,
+            `GRAVEDAD DE LA INFRACCIÓN: ${threatCheck.severity?.toUpperCase() || 'CRITICAL'}`,
+            `ESTADO DE LA CUENTA: BANEADA PERMANENTEMENTE (IP + GMAIL)`,
+            ``,
+            `--------------------------------------------------------------------------------`,
+            `                        TRANSCRIPCIÓN COMPLETA DE LA SALA                       `,
+            `--------------------------------------------------------------------------------`
+          ];
+
+          allMessages.forEach((msg, idx) => {
+            let body = msg.encryptedText || '';
+            // If message was intercepted with plainText
+            if (msg.id === job.msgId && job.plainTextForAI) {
+              body = `[FLAGRANTE AUDITADO]: ${job.plainTextForAI}`;
+            }
+            transcriptLines.push(`[#${idx + 1}] [${msg.time || new Date(msg.timestamp).toLocaleTimeString()}] ${msg.senderName} (${msg.senderEmail || 'N/A'} | ID: ${msg.senderId}):`);
+            transcriptLines.push(`     ${body}`);
+            if (msg.attachments && msg.attachments.length > 0) {
+              transcriptLines.push(`     [Adjuntos: ${msg.attachments.map(a => `${a.name} (${a.type})`).join(', ')}]`);
+            }
+            transcriptLines.push(``);
+          });
+
+          transcriptLines.push(`================================================================================`);
+          transcriptLines.push(`FIN DEL EXPEDIENTE FORENSE - REGISTRO CIFRADO Y PRESERVADO PARA EL STAFF/JUSTICIA`);
+          transcriptLines.push(`================================================================================`);
+
+          const fullTranscriptText = transcriptLines.join('\n');
+          const forensicCaseId = `case-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+
+          // Count users expelled
+          const expelledCount = wss.clients ? Array.from(wss.clients).filter((c: any) => c.roomId === job.roomId).length : 0;
+
+          // 2. Save Forensic Case to MongoDB for Staff to download
+          await db.addForensicCase({
+            id: forensicCaseId,
+            roomId: job.roomId,
+            roomName: roomName,
+            offenderUserId: job.senderUserId,
+            offenderEmail: job.senderEmail || (user?.email || 'N/A'),
+            offenderName: user ? user.name : 'Infractor',
+            offenderIp: job.senderIp,
+            lawArticles: threatCheck.lawArticles,
+            violationSummary: threatCheck.reason || 'Actividad ilícita detectada bajo ley argentina',
+            evidenceSnippet: threatCheck.evidence || job.payloadToAnalyze.slice(0, 200),
+            fullTranscript: fullTranscriptText,
+            messagesJson: allMessages,
+            usersExpelledCount: expelledCount
+          });
+
+          // 3. BROADCAST ROOM EMERGENCY SHUTDOWN TO ALL PARTICIPANTS IN ROOM
+          broadcastToRoom(job.roomId, {
+            type: "ROOM_EMERGENCY_SHUTDOWN",
+            roomId: job.roomId,
+            roomName: roomName,
+            reason: `🚨 SALA CLAUSURADA E INCAUTADA DE EMERGENCIA: Se ha detectado contenido ilegal tipificado en la legislación penal argentina (${threatCheck.lawArticles[0] || 'Código Penal'}).`,
+            lawArticles: threatCheck.lawArticles,
+            offenderEmail: job.senderEmail,
+            message: "Todos los participantes han sido desconectados por seguridad. El expediente de la conversación ha sido generado para el staff."
+          });
+
+          // 4. Force disconnect all websockets in this room
+          if (wss && wss.clients) {
+            wss.clients.forEach((client: any) => {
+              if (client.roomId === job.roomId) {
+                try {
+                  client.send(JSON.stringify({
+                    type: "FORCE_DISCONNECT_ROOM",
+                    roomId: job.roomId,
+                    reason: "La sala ha sido clausurada y eliminada por infracción penal."
+                  }));
+                  client.close(4001, "Room Seized");
+                } catch (e) {}
+              }
+            });
+          }
+
+          // 5. DELETE THE ROOM COMPLETELY FROM DATABASE
+          await db.deleteRoom(job.roomId);
+          if (wss && wss.clients) {
+            wss.clients.forEach((client: any) => {
+              if (client.readyState === 1) {
+                try {
+                  client.send(JSON.stringify({ type: "ROOM_DELETED", roomId: job.roomId }));
+                } catch (e) {}
+              }
+            });
+          }
+
+          // 6. PERMANENT BAN FOR OFFENDER (IP + GMAIL)
+          await db.banUserAndIP(
+            job.senderIp,
+            `Infracción Penal (Ley Argentina): ${threatCheck.reason} - ${threatCheck.lawArticles.join(', ')}`,
+            "critical",
+            threatCheck.evidence || job.payloadToAnalyze
+          );
+
+          if (user) {
+            user.isBanned = true;
+            user.status = 'Baneado';
+            user.banReason = `Violación de leyes penales de la República Argentina: ${threatCheck.reason}`;
+            user.banSeverity = 'critical';
+            user.banEvidence = threatCheck.evidence;
+            await db.saveUser(user);
+          }
+
+          db.logSecurityEvent(
+            job.senderIp,
+            "AI_THREAT_BLOCKED",
+            job.senderEmail,
+            `[EXPEDIENTE ${forensicCaseId}] Sala ${job.roomId} eliminada y usuario ${job.senderEmail} baneado por infracción de Ley Argentina (${threatCheck.lawArticles.join(', ')})`,
+            true
+          );
+
+          continue;
+        }
+
+        // Standard moderation handling for lower-severity warnings
         const currentMsgs = (await db.getMessages(job.roomId)) || [];
         const updatedMsgs = currentMsgs.filter(m => m.id !== job.msgId);
         
@@ -1660,7 +2223,6 @@ async function processModerationQueue() {
           reason: "Mensaje removido por Moderación IA: " + threatCheck.reason
         });
 
-        const user = (await db.getUser(job.senderUserId));
         if (user) {
           const infResult = await handleUserInfractionAndNotify(
             user,
@@ -1689,7 +2251,7 @@ async function processModerationQueue() {
             roomId: job.roomId,
             senderId: "bot-ai-assistant",
             senderName: "🤖 Moderación IA",
-            senderEmail: "bot@paginaprotegida.com",
+            senderEmail: "bot@aether.network",
             encryptedText: infResult.botMsg,
             reactions: [],
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -1713,6 +2275,43 @@ async function processModerationQueue() {
   }
 
   isProcessingModerationQueue = false;
+}
+
+// Helper to format user response with validated Premium status and tier
+function formatUserResponse(u: UserRecord) {
+  const now = Date.now();
+  let isPremiumActive = !!u.isPremium;
+  let planTier = u.planTier || (u.isPremium ? 'premium' : 'free');
+
+  const isMaster = (u.email && u.email.toLowerCase() === MASTER_ADMIN_EMAIL) || u.role === "admin";
+  const effectiveRole = isMaster ? "admin" : u.role;
+
+  if (isMaster) {
+    isPremiumActive = true;
+    if (planTier === 'free') planTier = 'cyber_elite';
+  } else if (isPremiumActive && u.premiumExpiresAt && u.premiumExpiresAt > 0 && u.premiumExpiresAt <= now) {
+    isPremiumActive = false;
+    planTier = 'free';
+  }
+
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    ip: u.ip,
+    role: effectiveRole,
+    status: u.status,
+    isVerified: u.isVerified,
+    createdAt: u.createdAt,
+    isBanned: !!u.isBanned,
+    isPremium: isPremiumActive,
+    planTier: planTier,
+    premiumExpiresAt: u.premiumExpiresAt,
+    avatar: u.avatar,
+    statusMood: u.statusMood,
+    bio: u.bio,
+    ipWhitelist: Array.isArray(u.ipWhitelist) ? u.ipWhitelist : []
+  };
 }
 
 // ==========================================
@@ -1849,16 +2448,7 @@ app.post("/api/auth/register-verify", async (req, res) => {
 
   res.json({
     token,
-    user: {
-      id: newUser.id,
-      email: newUser.email,
-      name: newUser.name,
-      ip: newUser.ip,
-      role: newUser.role,
-      status: newUser.status,
-      isVerified: newUser.isVerified,
-      createdAt: newUser.createdAt
-    }
+    user: formatUserResponse(newUser)
   });
 });
 
@@ -1920,12 +2510,13 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
+  const isMasterAdminEmail = cleanEmail === MASTER_ADMIN_EMAIL;
 
-  if (cleanEmail === "ydark126@gmail.com") {
+  if (isMasterAdminEmail) {
     await db.ensureMasterAdmin();
   }
 
-  if (cleanEmail !== "ydark126@gmail.com") {
+  if (!isMasterAdminEmail) {
     const threatCheck = await analyzeTrafficWithAI(ip, cleanEmail, `${cleanEmail}`, "INICIO_SESION");
     if (threatCheck.blocked) {
       return res.status(403).json({ error: "Aether Security: Acceso denegado por seguridad" });
@@ -1933,7 +2524,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   let userId = ((await db.getUserByEmail(cleanEmail))?.id);
-  if (!userId && cleanEmail === "ydark126@gmail.com") {
+  if (!userId && isMasterAdminEmail) {
     await db.ensureMasterAdmin();
     userId = ((await db.getUserByEmail(cleanEmail))?.id);
   }
@@ -1949,10 +2540,20 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(401).json({ error: "Credenciales de acceso incorrectas" });
   }
 
-  if (cleanEmail !== "ydark126@gmail.com") {
-    if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(ip))) {
+  if (!isMasterAdminEmail && user.role !== 'admin') {
+    if (user.isBanned || user.status === 'Baneado' || (await db.isIpBanned(ip))) {
       db.logSecurityEvent(ip, "SUSPICIOUS_ATTEMPT", cleanEmail, "Intento de login con cuenta o IP Baneada", true);
       return res.status(403).json({ error: "Aether Security: Esta cuenta o IP se encuentra en estado Baneado." });
+    }
+  }
+
+  // IP Whitelist Check on Login
+  if (Array.isArray(user.ipWhitelist) && user.ipWhitelist.length > 0) {
+    if (!checkIsIpWhitelisted(ip, user.ipWhitelist, user.ip)) {
+      db.logSecurityEvent(ip, "LOGIN_BLOCKED_IP_WHITELIST", cleanEmail, `Intento de inicio de sesión bloqueado desde IP no autorizada (${ip})`, true);
+      return res.status(403).json({
+        error: `Aether Security: Acceso bloqueado. La dirección IP ${ip} no está autorizada en la Lista Blanca de esta cuenta.`
+      });
     }
   }
 
@@ -1965,16 +2566,7 @@ app.post("/api/auth/login", async (req, res) => {
 
   res.json({
     token,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      ip: user.ip,
-      role: user.role,
-      status: user.status,
-      isVerified: user.isVerified,
-      createdAt: user.createdAt
-    }
+    user: formatUserResponse(user)
   });
 });
 
@@ -2108,20 +2700,7 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
   }
 
   res.json({
-    user: {
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      ip: u.ip,
-      role: u.role,
-      status: u.status,
-      isVerified: u.isVerified,
-      createdAt: u.createdAt,
-      isBanned: u.isBanned,
-      isPremium: u.isPremium,
-      premiumExpiresAt: u.premiumExpiresAt,
-      avatar: u.avatar
-    },
+    user: formatUserResponse(u),
     admin2FAVerified: is2FA
   });
 });
@@ -2129,7 +2708,7 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
 app.put("/api/users/profile", authenticateToken, async (req, res) => {
   try {
     const user = (req as any).user as UserRecord;
-    const { name, avatar } = req.body;
+    const { name, avatar, bio, statusMood } = req.body;
     
     if (name && typeof name === 'string' && name.trim().length > 0) {
       user.name = name.trim();
@@ -2137,25 +2716,18 @@ app.put("/api/users/profile", authenticateToken, async (req, res) => {
     if (avatar !== undefined) {
       user.avatar = avatar;
     }
+    if (bio !== undefined) {
+      user.bio = typeof bio === 'string' ? bio.slice(0, 250) : undefined;
+    }
+    if (statusMood !== undefined) {
+      user.statusMood = typeof statusMood === 'string' ? statusMood.slice(0, 60) : undefined;
+    }
     
     await db.saveUser(user);
     
     res.json({
       message: "Perfil actualizado correctamente",
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        ip: user.ip,
-        role: user.role,
-        status: user.status,
-        isVerified: user.isVerified,
-        createdAt: user.createdAt,
-        isBanned: user.isBanned,
-        isPremium: !!user.isPremium,
-        premiumExpiresAt: user.premiumExpiresAt,
-        avatar: user.avatar
-      }
+      user: formatUserResponse(user)
     });
   } catch (err: any) {
     res.status(500).json({ error: "Error al actualizar el perfil" });
@@ -2186,6 +2758,45 @@ app.post("/api/users/change-password", authenticateToken, async (req, res) => {
     res.json({ message: "Contraseña cambiada exitosamente" });
   } catch (err: any) {
     res.status(500).json({ error: "Error al cambiar contraseña" });
+  }
+});
+
+app.post("/api/users/ip-whitelist", authenticateToken, async (req, res) => {
+  try {
+    const user = (req as any).user as UserRecord;
+    const { ipWhitelist } = req.body;
+
+    if (!Array.isArray(ipWhitelist)) {
+      return res.status(400).json({ error: "La lista de IPs debe ser un arreglo de direcciones." });
+    }
+
+    const cleanIps = ipWhitelist
+      .map((i: any) => String(i || '').trim())
+      .filter((i: string) => i.length > 0);
+
+    const ipRegex = /^([0-9]{1,3}\.){3}[0-9]{1,3}$|^::1$|^127\.0\.0\.1$|^[a-fA-F0-9:]+$/;
+    for (const testIp of cleanIps) {
+      if (!ipRegex.test(testIp)) {
+        return res.status(400).json({ error: `La dirección IP "${testIp}" no tiene un formato IPv4 o IPv6 válido (ej. 192.168.1.1).` });
+      }
+    }
+
+    const uniqueIps = Array.from(new Set(cleanIps));
+    user.ipWhitelist = uniqueIps;
+    await db.saveUser(user);
+
+    const clientIp = getClientIP(req);
+    db.logSecurityEvent(clientIp, "IP_WHITELIST_UPDATED", user.email, `Lista Blanca de IPs actualizada (${uniqueIps.length} IP(s) autorizada(s))`);
+    broadcastUserUpdate(user, "SECURITY_UPDATE");
+
+    res.json({
+      message: uniqueIps.length > 0
+        ? `Lista Blanca de IPs configurada con éxito (${uniqueIps.length} red(es) autorizada(s)).`
+        : "Lista Blanca desactivada. Acceso permitido desde cualquier dirección IP.",
+      user: formatUserResponse(user)
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Error al actualizar la Lista Blanca de IPs" });
   }
 });
 
@@ -2583,23 +3194,7 @@ app.get("/api/admin/mongo-stats", authenticateToken, requireAdmin, async (req, r
 });
 
 app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
-  const userList = (await db.getAllUsers()).map(u => ({
-    id: u.id,
-    email: u.email,
-    name: u.name,
-    ip: u.ip,
-    role: u.role,
-    status: u.status,
-    isVerified: u.isVerified,
-    createdAt: u.createdAt,
-    isBanned: u.isBanned,
-    banReason: u.banReason,
-    banSeverity: u.banSeverity,
-    banEvidence: u.banEvidence,
-    bannedAt: u.bannedAt,
-    isPremium: u.isPremium,
-    premiumExpiresAt: u.premiumExpiresAt
-  }));
+  const userList = (await db.getAllUsers()).map(u => formatUserResponse(u));
   res.json(userList);
 });
 
@@ -2655,11 +3250,13 @@ app.post("/api/admin/toggle-status", authenticateToken, requireAdmin, async (req
   }
 
   redis.flush();
+  broadcastUserUpdate(u, u.isBanned ? 'BAN' : 'UNBAN');
+
   res.json({ message: `Estado actualizado a ${u.status}`, user: u });
 });
 
 app.post("/api/admin/edit-user", authenticateToken, requireAdmin, async (req, res) => {
-  const { userId, name, email, role, status, ip, isPremium, premiumExpiresAt } = req.body;
+  const { userId, name, email, role, status, ip, isPremium, planTier, premiumExpiresAt } = req.body;
   if (!userId) return res.status(400).json({ error: "ID de usuario es obligatorio" });
 
   const u = await db.getUser(userId);
@@ -2683,12 +3280,31 @@ app.post("/api/admin/edit-user", authenticateToken, requireAdmin, async (req, re
     u.isBanned = status === 'Baneado';
   }
   if (ip !== undefined && ip.trim() !== "") u.ip = ip.trim();
-  if (isPremium !== undefined) {
+  
+  if (planTier !== undefined) {
+    u.planTier = planTier;
+    if (planTier === 'free') {
+      u.isPremium = false;
+      u.premiumExpiresAt = undefined;
+    } else {
+      u.isPremium = true;
+      if (!u.premiumExpiresAt || u.premiumExpiresAt <= Date.now()) {
+        u.premiumExpiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      }
+    }
+  } else if (isPremium !== undefined) {
     u.isPremium = !!isPremium;
-    if (u.isPremium && (!u.premiumExpiresAt || u.premiumExpiresAt <= Date.now())) {
-      u.premiumExpiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    if (u.isPremium) {
+      if (!u.planTier || u.planTier === 'free') u.planTier = 'premium';
+      if (!u.premiumExpiresAt || u.premiumExpiresAt <= Date.now()) {
+        u.premiumExpiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+      }
+    } else {
+      u.planTier = 'free';
+      u.premiumExpiresAt = undefined;
     }
   }
+
   if (premiumExpiresAt !== undefined) u.premiumExpiresAt = premiumExpiresAt ? Number(premiumExpiresAt) : undefined;
 
   await db.saveUser(u);
@@ -2697,16 +3313,73 @@ app.post("/api/admin/edit-user", authenticateToken, requireAdmin, async (req, re
 
   // Trigger invoice / notification email if premium state changed
   if (!wasPremium && u.isPremium) {
-    await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'ACTIVATED', expiresAt: u.premiumExpiresAt });
+    await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'ACTIVATED', expiresAt: u.premiumExpiresAt, planTier: u.planTier });
   } else if (wasPremium && !u.isPremium) {
     await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'REMOVED', reason: 'Ajuste manual de perfil por administrador' });
   } else if (wasPremium && u.isPremium && oldExpiresAt !== u.premiumExpiresAt) {
-    await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'EXTENDED', expiresAt: u.premiumExpiresAt });
+    await sendPremiumInvoiceEmail({ userEmail: u.email, userName: u.name, type: 'EXTENDED', expiresAt: u.premiumExpiresAt, planTier: u.planTier });
   }
 
-  db.logSecurityEvent("ADMIN", "ROLE_CHANGED", u.email, `Perfil de usuario ${u.name} actualizado por Administrador`);
+  db.logSecurityEvent("ADMIN", "ROLE_CHANGED", u.email, `Perfil de usuario ${u.name} actualizado por Administrador (Plan: ${u.planTier || 'free'})`);
+  broadcastUserUpdate(u, 'PROFILE_EDIT');
 
   res.json({ message: `Perfil de ${u.name} actualizado exitosamente`, user: u });
+});
+
+// SET USER PLAN TIER DIRECTLY (Admin only)
+app.post("/api/admin/set-user-plan", authenticateToken, requireAdmin, async (req, res) => {
+  const { userId, planTier, days } = req.body;
+  if (!userId) return res.status(400).json({ error: "ID de usuario requerido" });
+  if (!['free', 'premium', 'cyber_elite'].includes(planTier)) {
+    return res.status(400).json({ error: "Plan no válido (free, premium o cyber_elite)" });
+  }
+
+  const u = await db.getUser(userId);
+  if (!u) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const durationDays = days && Number(days) > 0 ? Number(days) : 30;
+  const wasPremium = !!u.isPremium;
+
+  if (planTier === 'free') {
+    u.planTier = 'free';
+    u.isPremium = false;
+    u.premiumExpiresAt = undefined;
+  } else {
+    u.planTier = planTier;
+    u.isPremium = true;
+    u.premiumExpiresAt = Date.now() + durationDays * 24 * 60 * 60 * 1000;
+  }
+
+  await db.saveUser(u);
+  redis.flush();
+
+  const planDisplayName = planTier === 'cyber_elite' ? '⚡ Cyber Elite Ultra' : planTier === 'premium' ? '👑 Aether Premium VIP' : '🛡️ Plan Básico / Gratis';
+
+  if (!wasPremium && u.isPremium) {
+    await sendPremiumInvoiceEmail({
+      userEmail: u.email,
+      userName: u.name,
+      type: 'ACTIVATED',
+      months: Math.ceil(durationDays / 30),
+      expiresAt: u.premiumExpiresAt,
+      planTier: u.planTier
+    });
+  } else if (wasPremium && !u.isPremium) {
+    await sendPremiumInvoiceEmail({
+      userEmail: u.email,
+      userName: u.name,
+      type: 'REMOVED',
+      reason: 'Plan restablecido a Básico / Gratuito por administración'
+    });
+  }
+
+  db.logSecurityEvent("ADMIN", "ROLE_CHANGED", u.email, `Plan de ${u.name} cambiado a ${planDisplayName} por ${durationDays} días`);
+  broadcastUserUpdate(u, 'PLAN_CHANGE');
+
+  res.json({
+    message: `Plan de ${u.name} actualizado exitosamente a ${planDisplayName}`,
+    user: formatUserResponse(u)
+  });
 });
 
 app.post("/api/admin/delete-user", authenticateToken, requireAdmin, async (req, res) => {
@@ -2725,6 +3398,7 @@ app.post("/api/admin/delete-user", authenticateToken, requireAdmin, async (req, 
   redis.flush();
 
   db.logSecurityEvent("ADMIN", "ACCESS_DENIED", u.email, `Cuenta de usuario ${u.name} eliminada por el Administrador`);
+  broadcastUserUpdate({ id: userId, isBanned: true, status: 'Eliminado', email: u.email }, 'BAN');
 
   res.json({ message: `Usuario ${u.name} eliminado permanentemente` });
 });
@@ -2812,6 +3486,14 @@ app.post("/api/admin/ban-ip", authenticateToken, requireAdmin, async (req, res) 
     banSource
   );
 
+  if (userId) {
+    const targetU = await db.getUser(userId);
+    if (targetU) broadcastUserUpdate(targetU, 'BAN');
+  } else {
+    const allU = await db.getAllUsers();
+    allU.filter(u => u.ip === cleanIp).forEach(u => broadcastUserUpdate(u, 'BAN'));
+  }
+
   res.json({ message: `IP ${cleanIp} bloqueada exitosamente en el firewall.` });
 });
 
@@ -2831,6 +3513,7 @@ app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, async (req, res
     u.banReason = undefined;
     u.banEvidence = undefined;
     await db.saveUser(u);
+    broadcastUserUpdate(u, 'UNBAN');
   } else if (cleanIp) {
     const allUsers = await db.getAllUsers();
     for (const u of allUsers) {
@@ -2839,6 +3522,7 @@ app.post("/api/admin/unban-ip", authenticateToken, requireAdmin, async (req, res
         u.status = 'Activo';
         u.banReason = undefined;
         await db.saveUser(u);
+        broadcastUserUpdate(u, 'UNBAN');
       }
     }
   }
@@ -2874,6 +3558,7 @@ app.post("/api/admin/premium/add", authenticateToken, requireAdmin, async (req, 
     u.isPremium = true;
     u.premiumExpiresAt = newExpiresAt;
     await db.saveUser(u);
+    broadcastUserUpdate(u, 'PREMIUM_UPDATE');
   }
   redis.flush();
 
@@ -2882,7 +3567,8 @@ app.post("/api/admin/premium/add", authenticateToken, requireAdmin, async (req, 
     userName: doc.name || cleanEmail,
     type: 'ACTIVATED',
     months: parseInt(months),
-    expiresAt: newExpiresAt
+    expiresAt: newExpiresAt,
+    planTier: u?.planTier
   });
 
   res.json({ message: `Premium añadido exitosamente por ${months} mes(es)`, expiresAt: newExpiresAt });
@@ -2906,6 +3592,7 @@ app.post("/api/admin/premium/remove", authenticateToken, requireAdmin, async (re
     u.isPremium = false;
     u.premiumExpiresAt = undefined;
     await db.saveUser(u);
+    broadcastUserUpdate(u, 'PREMIUM_UPDATE');
   }
   redis.flush();
 
@@ -2938,6 +3625,7 @@ app.post("/api/admin/premium/update-date", authenticateToken, requireAdmin, asyn
   if (u) {
     u.premiumExpiresAt = newExpiresAt;
     await db.saveUser(u);
+    broadcastUserUpdate(u, 'PREMIUM_UPDATE');
   }
   redis.flush();
 
@@ -2945,7 +3633,8 @@ app.post("/api/admin/premium/update-date", authenticateToken, requireAdmin, asyn
     userEmail: cleanEmail,
     userName: doc.name || cleanEmail,
     type: 'EXTENDED',
-    expiresAt: newExpiresAt
+    expiresAt: newExpiresAt,
+    planTier: u?.planTier
   });
 
   res.json({ message: "Fecha de expiración actualizada", expiresAt: newExpiresAt });
@@ -2953,6 +3642,31 @@ app.post("/api/admin/premium/update-date", authenticateToken, requireAdmin, asyn
 
 app.get("/api/admin/threats", authenticateToken, requireAdmin, async (req, res) => {
   res.json((await db.getAllThreats()));
+});
+
+// FORENSIC CASES & ARGENTINE LAW AUDIT DOSSIERS
+app.get("/api/admin/forensic-cases", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const cases = await db.getAllForensicCases();
+    res.json(cases);
+  } catch (err: any) {
+    res.status(500).json({ error: "Error obteniendo expedientes forenses: " + err.message });
+  }
+});
+
+app.post("/api/admin/delete-forensic-case", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { caseId } = req.body;
+    if (!caseId) return res.status(400).json({ error: "ID de caso requerido" });
+    const success = await db.deleteForensicCase(caseId);
+    if (success) {
+      res.json({ message: "Expediente forense eliminado correctamente" });
+    } else {
+      res.status(500).json({ error: "No se pudo eliminar el expediente" });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: "Error eliminando expediente: " + err.message });
+  }
 });
 
 app.get("/api/admin/access-logs", authenticateToken, requireAdmin, async (req, res) => {
@@ -3076,7 +3790,8 @@ app.post("/api/admin/ws-monitor/simulate-threat", authenticateToken, requireAdmi
 // TEST SMTP Email Dispatch
 app.post("/api/admin/test-smtp", authenticateToken, requireAdmin, async (req, res) => {
   const { toEmail } = req.body;
-  const targetEmail = toEmail ? String(toEmail).trim() : "ydark126@gmail.com";
+  const adminUser = (req as any).user as UserRecord;
+  const targetEmail = toEmail ? String(toEmail).trim() : (adminUser?.email || currentSmtpConfig.user || MASTER_ADMIN_EMAIL);
 
   const content = `
     <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
@@ -3435,9 +4150,23 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
         }
 
         const user = await db.getUser(userId);
-        if (user.isBanned || user.status === 'Sancionado' || (await db.isIpBanned(ip))) {
-          ws.send(JSON.stringify({ type: "ERROR", message: "Aether Security: Usuario con estado Baneado" }));
+        if (user.isBanned || user.status === 'Sancionado' || user.status === 'Baneado' || (await db.isIpBanned(ip))) {
+          ws.send(JSON.stringify({ type: "ERROR", message: "Aether Security: Usuario con estado Baneado o IP bloqueada" }));
           return ws.close();
+        }
+
+        const vpnCheck = isVpnOrProxy(req as any);
+        if (vpnCheck.detected) {
+          ws.send(JSON.stringify({ type: "THREAT_BLOCKED", reason: "Uso de VPN o Proxy detectado", ip }));
+          return ws.close();
+        }
+
+        if (Array.isArray(user.ipWhitelist) && user.ipWhitelist.length > 0) {
+          if (!checkIsIpWhitelisted(ip, user.ipWhitelist, user.ip)) {
+            db.logSecurityEvent(ip, "UNAUTHORIZED_IP_ACCESS", user.email, `WS bloqueado por Lista Blanca de IPs (${ip})`, true);
+            ws.send(JSON.stringify({ type: "ERROR", message: `Aether Security: Acceso bloqueado. La IP ${ip} no está en tu Lista Blanca.` }));
+            return ws.close();
+          }
         }
 
         tracker.userId = user.id;
@@ -3495,6 +4224,18 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
         }
         roomConnections.get(roomId)!.add(ws);
 
+        // Mark existing unread messages as read by this user
+        const readMessageIds = await db.markMessagesRead(roomId, senderData.userId);
+        if (readMessageIds.length > 0) {
+          broadcastToRoom(roomId, {
+            type: "MESSAGES_READ",
+            roomId,
+            readerId: senderData.userId,
+            readerName: senderData.name,
+            messageIds: readMessageIds
+          });
+        }
+
         const roomMsgs = (await db.getMessages(roomId)) || [];
         ws.send(JSON.stringify({ type: "ROOM_HISTORY", roomId, messages: roomMsgs }));
 
@@ -3515,6 +4256,7 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           encryptedText: "", // We can use plain text for system messages
           plainTextForAI: `El usuario ${senderData.name} se ha unido a la sala.`,
           reactions: [],
+          readBy: [senderData.userId],
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: Date.now()
         };
@@ -3524,6 +4266,22 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           message: joinMsg
         });
         redis.del("rooms_list");
+        return;
+      }
+
+      if (msg.type === "MARK_READ") {
+        const { roomId } = msg;
+        if (!roomId) return;
+        const readMessageIds = await db.markMessagesRead(roomId, senderData.userId);
+        if (readMessageIds.length > 0) {
+          broadcastToRoom(roomId, {
+            type: "MESSAGES_READ",
+            roomId,
+            readerId: senderData.userId,
+            readerName: senderData.name,
+            messageIds: readMessageIds
+          });
+        }
         return;
       }
 
@@ -3548,7 +4306,7 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
       }
 
       if (msg.type === "SEND_MESSAGE") {
-        const { roomId, encryptedText, attachments, replyTo, selfDestruct, isBotRequest, plainTextForAI } = msg;
+        const { roomId, encryptedText, attachments, replyTo, selfDestruct, isBotRequest, plainTextForAI, poll, format, codeLanguage, isPinned } = msg;
         if (!roomId || !encryptedText) return;
 
         if (plainTextForAI && plainTextForAI.length > 2000) {
@@ -3576,7 +4334,18 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           }
         }
 
-        
+        // Active users currently in the room will instantly have the message marked as read
+        const activeUsersInRoom: string[] = [];
+        if (roomConnections.has(roomId)) {
+          for (const peerWs of roomConnections.get(roomId)!) {
+            const peerData = wsUserMap.get(peerWs);
+            if (peerData?.userId && peerData.userId !== senderData.userId) {
+              activeUsersInRoom.push(peerData.userId);
+            }
+          }
+        }
+        const initialReadBy = [senderData.userId, ...activeUsersInRoom];
+
         // 1. INSTANT BROADCAST TO ROOM CLIENTS FOR ZERO LATENCY
         const msgRecord: MessageRecord = {
           id: "msg-" + crypto.randomUUID(),
@@ -3589,13 +4358,17 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
           replyTo,
           reactions: [],
           selfDestruct,
+          isPinned: !!isPinned,
+          poll: poll || undefined,
+          format: format || 'markdown',
+          codeLanguage: codeLanguage || undefined,
+          readBy: initialReadBy,
+          status: 'sent',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: Date.now()
         };
 
-        const roomMsgs = (await db.getMessages(roomId)) || [];
-        roomMsgs.push(msgRecord);
-        if (roomMsgs.length > 200) roomMsgs.shift();
+        await db.saveMessage(msgRecord);
 
         broadcastToRoom(roomId, {
           type: "NEW_MESSAGE",
@@ -3605,8 +4378,7 @@ wss.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
         // 2. Self-Destruct / Disappearing message timer logic
         if (selfDestruct && typeof selfDestruct === 'number' && selfDestruct > 0) {
           setTimeout(async () => {
-            const currentMsgs = (await db.getMessages(roomId)) || [];
-            const filtered = currentMsgs.filter(m => m.id !== msgRecord.id);
+            await db.deleteMessage(msgRecord.id);
             broadcastToRoom(roomId, {
               type: "MESSAGE_DELETED",
               roomId,
@@ -3731,6 +4503,80 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
         return;
       }
 
+      if (msg.type === "PIN_MESSAGE") {
+        const { roomId, messageId } = msg;
+        if (!roomId || !messageId) return;
+
+        const roomMsgs = (await db.getMessages(roomId)) || [];
+        const targetMsg = roomMsgs.find(m => m.id === messageId);
+        if (targetMsg) {
+          targetMsg.isPinned = !targetMsg.isPinned;
+          await db.updateMessagePin(messageId, targetMsg.isPinned);
+          broadcastToRoom(roomId, {
+            type: "MESSAGE_PIN_TOGGLED",
+            roomId,
+            messageId,
+            isPinned: targetMsg.isPinned
+          });
+        }
+        return;
+      }
+
+      if (msg.type === "POLL_VOTE") {
+        const { roomId, messageId, optionId } = msg;
+        if (!roomId || !messageId || !optionId) return;
+
+        const roomMsgs = (await db.getMessages(roomId)) || [];
+        const targetMsg = roomMsgs.find(m => m.id === messageId);
+        if (targetMsg && targetMsg.poll && Array.isArray(targetMsg.poll.options)) {
+          // Toggle vote: remove if already in this option, or switch vote
+          targetMsg.poll.options.forEach((opt: any) => {
+            opt.votes = (opt.votes || []).filter((uid: string) => uid !== senderData.userId);
+          });
+          const targetOpt = targetMsg.poll.options.find((o: any) => o.id === optionId);
+          if (targetOpt) {
+            if (!targetOpt.votes) targetOpt.votes = [];
+            targetOpt.votes.push(senderData.userId);
+          }
+          
+          let total = 0;
+          targetMsg.poll.options.forEach((opt: any) => {
+            total += (opt.votes?.length || 0);
+          });
+          targetMsg.poll.totalVotes = total;
+
+          await db.updateMessagePoll(messageId, targetMsg.poll);
+          broadcastToRoom(roomId, {
+            type: "POLL_UPDATED",
+            roomId,
+            messageId,
+            poll: targetMsg.poll
+          });
+        }
+        return;
+      }
+
+      if (msg.type === "DELETE_MESSAGE") {
+        const { roomId, messageId } = msg;
+        if (!roomId || !messageId) return;
+
+        const roomMsgs = (await db.getMessages(roomId)) || [];
+        const targetMsg = roomMsgs.find(m => m.id === messageId);
+        const userObj = await db.getUser(senderData.userId);
+        const isAdmin = userObj?.role === 'admin';
+        const isAuthor = targetMsg?.senderId === senderData.userId;
+
+        if (targetMsg && (isAuthor || isAdmin)) {
+          await db.deleteMessage(messageId);
+          broadcastToRoom(roomId, {
+            type: "MESSAGE_DELETED",
+            roomId,
+            messageId
+          });
+        }
+        return;
+      }
+
       if (msg.type === "CLEAR_ROOM") {
         const { roomId } = msg;
         if (!roomId) return;
@@ -3789,18 +4635,20 @@ Atiende la solicitud del usuario ${senderData.name}: "${cleanPrompt}".`;
 async function broadcastRoomUsers(roomId: string) {
   const clients = roomConnections.get(roomId);
   if (!clients) return;
-  const usersMap = new Map<string, { id: string; name: string; email: string; role?: string; avatar?: string; isPremium?: boolean; ip?: string; status?: string }>();
+  const usersMap = new Map<string, { id: string; name: string; email: string; role?: string; avatar?: string; isPremium?: boolean; planTier?: string; ip?: string; status?: string }>();
   for (const client of clients) {
     const u = wsUserMap.get(client);
     if (u) {
       const userObj = (await db.getUser(u.userId));
+      const formatted = userObj ? formatUserResponse(userObj) : null;
       usersMap.set(u.userId, {
         id: u.userId,
         name: u.name,
         email: u.email,
-        role: userObj?.role || 'user',
+        role: formatted?.role || 'user',
         avatar: userObj?.avatar,
-        isPremium: userObj?.isPremium || false,
+        isPremium: formatted?.isPremium || false,
+        planTier: formatted?.planTier || 'free',
         ip: u.ip,
         status: userObj?.status || 'Activo'
       });

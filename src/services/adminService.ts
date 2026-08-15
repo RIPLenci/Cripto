@@ -1,5 +1,5 @@
 import { apiRequest } from './api';
-import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail } from '../types';
+import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail, ForensicCase } from '../types';
 
 export const adminService = {
   async getStats(token?: string): Promise<SystemStats> {
@@ -22,11 +22,19 @@ export const adminService = {
     });
   },
 
-  async editUser(data: { userId: string; name?: string; email?: string; role?: string; status?: string; ip?: string; isPremium?: boolean; premiumExpiresAt?: number }, token?: string): Promise<any> {
+  async editUser(data: { userId: string; name?: string; email?: string; role?: string; status?: string; ip?: string; isPremium?: boolean; planTier?: 'free' | 'premium' | 'cyber_elite'; premiumExpiresAt?: number }, token?: string): Promise<any> {
     return apiRequest('/api/admin/edit-user', {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: JSON.stringify(data),
+    });
+  },
+
+  async setUserPlan(userId: string, planTier: 'free' | 'premium' | 'cyber_elite', days?: number, token?: string): Promise<any> {
+    return apiRequest('/api/admin/set-user-plan', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ userId, planTier, days }),
     });
   },
 
@@ -113,6 +121,20 @@ export const adminService = {
   async getMongoStats(token?: string): Promise<any> {
     return apiRequest('/api/admin/mongo-stats', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  },
+
+  async getForensicCases(token?: string): Promise<ForensicCase[]> {
+    return apiRequest<ForensicCase[]>('/api/admin/forensic-cases', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  },
+
+  async deleteForensicCase(caseId: string, token?: string): Promise<any> {
+    return apiRequest('/api/admin/delete-forensic-case', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ caseId }),
     });
   },
 };

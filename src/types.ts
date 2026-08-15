@@ -1,3 +1,5 @@
+export type PlanTier = 'free' | 'premium' | 'cyber_elite';
+
 export interface InfractionLog {
   id: string;
   number: number;
@@ -21,14 +23,36 @@ export interface UserProfile {
   createdAt: number;
   isBanned?: boolean;
   isPremium?: boolean;
+  planTier?: 'free' | 'premium' | 'cyber_elite';
   premiumExpiresAt?: number;
   avatar?: string;
+  statusMood?: string;
+  bio?: string;
   violations?: number;
   infractions?: InfractionLog[];
   banReason?: string;
   banSeverity?: 'low' | 'medium' | 'high' | 'critical';
   banEvidence?: string;
   bannedAt?: number;
+  ipWhitelist?: string[];
+}
+
+export interface ForensicCase {
+  id: string;
+  roomId: string;
+  roomName: string;
+  offenderUserId: string;
+  offenderEmail: string;
+  offenderName: string;
+  offenderIp: string;
+  lawArticles: string[];
+  violationSummary: string;
+  evidenceSnippet: string;
+  fullTranscript: string;
+  messagesJson?: any[];
+  timestamp: number;
+  status: 'seized_and_banned';
+  usersExpelledCount: number;
 }
 
 export interface AuthSession {
@@ -73,6 +97,17 @@ export interface ChatMessage {
   replyTo?: { id: string; senderName: string; text: string };
   reactions?: Array<{emoji: string, senderName: string}> | any[];
   selfDestruct?: number;
+  isPinned?: boolean;
+  poll?: {
+    question: string;
+    options: Array<{ id: string; text: string; votes: string[] }>;
+    totalVotes?: number;
+    closed?: boolean;
+  };
+  format?: 'markdown' | 'code' | 'poll';
+  codeLanguage?: string;
+  readBy?: string[];
+  status?: 'sending' | 'sent' | 'read';
   time: string;
   timestamp: number;
 }
@@ -165,6 +200,14 @@ export interface CustomPreferences {
   fontFam: 'font-jakarta' | 'font-inter' | 'font-mono' | 'font-outfit';
   privacyBlur: boolean;
   soundEnabled: boolean;
+  soundType?: 'futuristic' | 'chime' | 'pulse' | 'sonar';
   autoScroll: boolean;
   highContrast: boolean;
+  chatBubbleStyle?: 'modern' | 'cyber' | 'minimal' | 'glass';
+  chatPattern?: 'grid' | 'dots' | 'carbon' | 'subtle' | 'none';
+  uiDensity?: 'compact' | 'comfortable' | 'spacious';
+  timeFormat?: '12h' | '24h';
+  messagePreview?: boolean;
+  autoLockMinutes?: number;
+  antiSpyMode?: boolean;
 }

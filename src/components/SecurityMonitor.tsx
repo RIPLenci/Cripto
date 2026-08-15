@@ -349,8 +349,8 @@ export const SecurityMonitor: React.FC<SecurityMonitorProps> = ({ token, onNotif
                     </td>
                   </tr>
                 ) : (
-                  filteredClients.map((client) => (
-                    <tr key={client.id} className="hover:bg-slate-800/40 transition-colors">
+                  filteredClients.map((client, idx) => (
+                    <tr key={client.id ? `${client.id}-${idx}` : `client-${client.ip}-${idx}`} className="hover:bg-slate-800/40 transition-colors">
                       <td className="p-3 font-mono font-bold text-white flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                         {client.ip}
@@ -424,8 +424,8 @@ export const SecurityMonitor: React.FC<SecurityMonitorProps> = ({ token, onNotif
       {/* TAB 2: HEURISTICS CONFIGURATION */}
       {activeTab === 'heuristics' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {stats?.heuristics.map((h) => (
-            <div key={h.id} className="p-5 rounded-2xl aether-card border border-slate-800/80 space-y-3 relative">
+          {stats?.heuristics.map((h, idx) => (
+            <div key={h.id ? `${h.id}-${idx}` : `heur-${idx}`} className="p-5 rounded-2xl aether-card border border-slate-800/80 space-y-3 relative">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[var(--accent)]">
@@ -488,8 +488,8 @@ export const SecurityMonitor: React.FC<SecurityMonitorProps> = ({ token, onNotif
                     </td>
                   </tr>
                 ) : (
-                  stats?.bannedIps.map((b) => (
-                    <tr key={b.ip} className="hover:bg-slate-800/40 transition-colors">
+                  stats?.bannedIps.map((b, idx) => (
+                    <tr key={`banned-${b.ip}-${idx}`} className="hover:bg-slate-800/40 transition-colors">
                       <td className="p-3 font-mono font-bold text-rose-300 flex items-center gap-2">
                         <Ban className="w-3.5 h-3.5 text-rose-400" />
                         {b.ip}
@@ -521,8 +521,8 @@ export const SecurityMonitor: React.FC<SecurityMonitorProps> = ({ token, onNotif
           {stats?.recentEvents.length === 0 ? (
             <p className="p-8 text-center text-slate-500">No se registran eventos de seguridad de WebSocket por el momento.</p>
           ) : (
-            stats?.recentEvents.map((ev) => (
-              <div key={ev.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-start gap-3">
+            stats?.recentEvents.map((ev, idx) => (
+              <div key={ev.id ? `${ev.id}-${idx}` : `ev-${idx}`} className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex items-start gap-3">
                 <span className="text-[10px] text-slate-500 shrink-0 mt-0.5">
                   {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>

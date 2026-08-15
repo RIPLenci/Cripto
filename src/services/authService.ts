@@ -58,7 +58,7 @@ export const authService = {
     });
   },
 
-  async updateProfile(data: { name?: string; avatar?: string }, token?: string): Promise<{ message: string; user: UserProfile }> {
+  async updateProfile(data: { name?: string; avatar?: string; bio?: string; statusMood?: string }, token?: string): Promise<{ message: string; user: UserProfile }> {
     return apiRequest<{ message: string; user: UserProfile }>('/api/users/profile', {
       method: 'PUT',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -71,6 +71,14 @@ export const authService = {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
+  async updateIpWhitelist(ipWhitelist: string[], token?: string): Promise<{ message: string; user: UserProfile }> {
+    return apiRequest<{ message: string; user: UserProfile }>('/api/users/ip-whitelist', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ ipWhitelist }),
     });
   },
 

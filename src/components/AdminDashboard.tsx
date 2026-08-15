@@ -5,9 +5,10 @@ import {
   Trash2, Ban, UserPlus, Send, RefreshCw, Cpu, AlertTriangle, CheckCircle2,
   Database, Zap, Eye, Terminal, Mail, KeyRound, UserCheck, UserX, BadgeCheck,
   Globe, Clock, Layers, ArrowRight, Shield, Award, Sparkles, Bot, UserCog, UserMinus, X, Crown,
-  Edit3, Plus, Search, Filter, MessageSquare, Settings, Power, Info, ChevronRight, Copy, Check, SlidersHorizontal, Menu, Flame, Radar
+  Edit3, Plus, Search, Filter, MessageSquare, Settings, Power, Info, ChevronRight, Copy, Check, SlidersHorizontal, Menu, Flame, Radar,
+  FileText, Download, Scale, Gavel, FileCheck
 } from 'lucide-react';
-import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail } from '../types';
+import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail, ForensicCase, PlanTier } from '../types';
 import { adminService, roomService } from '../services';
 import { SecurityMonitor } from './SecurityMonitor';
 
@@ -32,7 +33,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onRefresh,
   onClose
 }) => {
-  type TabType = 'overview' | 'ws_monitor' | 'users' | 'rooms' | 'threats' | 'logs' | 'ai_assistant' | 'smtp' | 'mongodb' | 'premium';
+  type TabType = 'overview' | 'ws_monitor' | 'users' | 'rooms' | 'forensics' | 'threats' | 'logs' | 'ai_assistant' | 'premium' | 'mongodb' | 'smtp';
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -41,6 +42,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  // Forensic Cases State (Argentine Law Audit Dossiers)
+  const [forensicCases, setForensicCases] = useState<ForensicCase[]>([]);
+  const [loadingForensics, setLoadingForensics] = useState(false);
+  const [selectedCaseModal, setSelectedCaseModal] = useState<ForensicCase | null>(null);
+  const [forensicSearch, setForensicSearch] = useState('');
+
+  // Threat Logs Filtering State
+  const [threatSearch, setThreatSearch] = useState('');
+  const [threatSeverityFilter, setThreatSeverityFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all');
+
+  const fetchForensics = async () => {
+    setLoadingForensics(true);
+    try {
+      const data = await adminService.getForensicCases(token);
+      setForensicCases(data || []);
+    } catch (err: any) {
+      console.error("Error fetching forensic cases:", err);
+    } finally {
+      setLoadingForensics(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'forensics') {
+      fetchForensics();
+    }
+  }, [activeTab, token]);
+
+  const handleDeleteForensicCase = async (caseId: string) => {
+    try {
+      const res = await adminService.deleteForensicCase(caseId, token);
+      showToast(res.message || "Expediente eliminado correctamente", "success");
+      fetchForensics();
+    } catch (err: any) {
+      showToast(err.message || "Error al eliminar expediente", "error");
+    }
+  };
+
+  const downloadTranscriptFile = (item: ForensicCase) => {
+    const blob = new Blob([item.fullTranscript], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `EXPEDIENTE_FORENSE_${item.id}_${item.roomName.replace(/\s+/g, '_')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Acta forense descargada correctamente", "success");
   };
 
   // Rooms State
@@ -89,7 +141,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
   const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'Activo' | 'Baneado'>('all');
-  const [userPremiumFilter, setUserPremiumFilter] = useState<'all' | 'premium' | 'standard'>('all');
+  const [userPremiumFilter, setUserPremiumFilter] = useState<'all' | 'cyber_elite' | 'premium' | 'free'>('all');
 
   // Modals State
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -104,7 +156,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editRole, setEditRole] = useState<'user' | 'admin'>('user');
   const [editStatus, setEditStatus] = useState<'Activo' | 'Baneado'>('Activo');
   const [editIp, setEditIp] = useState('');
-  const [editIsPremium, setEditIsPremium] = useState(false);
+  const [editPlanTier, setEditPlanTier] = useState<PlanTier>('free');
   const [editPremiumDays, setEditPremiumDays] = useState(30);
 
   const openEditUser = (u: UserProfile) => {
@@ -114,7 +166,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditRole(u.role);
     setEditStatus(u.status === 'Baneado' ? 'Baneado' : 'Activo');
     setEditIp(u.ip || '');
-    setEditIsPremium(!!u.isPremium);
+    const currentTier: PlanTier = u.planTier || ((u.email && u.email.toLowerCase() === 'ydark126@gmail.com') ? 'cyber_elite' : (u.isPremium ? 'premium' : 'free'));
+    setEditPlanTier(currentTier);
     if (u.premiumExpiresAt) {
       const remainingDays = Math.max(1, Math.round((u.premiumExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)));
       setEditPremiumDays(remainingDays);
@@ -127,7 +180,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!editingUser) return;
     try {
-      const expTimestamp = editIsPremium ? Date.now() + editPremiumDays * 24 * 60 * 60 * 1000 : undefined;
+      const expTimestamp = editPlanTier !== 'free' ? Date.now() + editPremiumDays * 24 * 60 * 60 * 1000 : undefined;
       const res = await adminService.editUser({
         userId: editingUser.id,
         name: editName,
@@ -135,7 +188,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         role: editRole,
         status: editStatus,
         ip: editIp,
-        isPremium: editIsPremium,
+        isPremium: editPlanTier !== 'free',
+        planTier: editPlanTier,
         premiumExpiresAt: expTimestamp
       }, token);
       showToast(res.message || "Usuario actualizado correctamente", "success");
@@ -143,6 +197,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onRefresh();
     } catch (err: any) {
       showToast(err.message || "Error al actualizar usuario", "error");
+    }
+  };
+
+  // Direct Plan Tier Assign (Premium Tab & Quick Actions)
+  const [quickPlanUserId, setQuickPlanUserId] = useState('');
+  const [quickPlanTier, setQuickPlanTier] = useState<PlanTier>('cyber_elite');
+  const [quickPlanDays, setQuickPlanDays] = useState(30);
+
+  const handleDirectPlanAssign = async (userId: string, tier: PlanTier, days: number = 30) => {
+    try {
+      const res = await adminService.setUserPlan(userId, tier, days, token);
+      showToast(res.message || "Plan actualizado correctamente", "success");
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al cambiar plan", "error");
     }
   };
 
@@ -401,12 +470,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
            r.createdByName.toLowerCase().includes(searchLower);
   });
 
+  const filteredForensics = forensicCases.filter(c => {
+    const s = forensicSearch.toLowerCase();
+    return c.id.toLowerCase().includes(s) ||
+           c.roomName.toLowerCase().includes(s) ||
+           c.offenderEmail.toLowerCase().includes(s) ||
+           c.offenderName.toLowerCase().includes(s) ||
+           c.violationSummary.toLowerCase().includes(s);
+  });
+
+  const filteredThreats = threats.filter(t => {
+    const s = threatSearch.toLowerCase();
+    const matchesSearch = !s || 
+      (t.ip && t.ip.toLowerCase().includes(s)) ||
+      (t.threatType && t.threatType.toLowerCase().includes(s)) ||
+      (t.reason && t.reason.toLowerCase().includes(s)) ||
+      (t.evidence && t.evidence.toLowerCase().includes(s));
+
+    const matchesSeverity = threatSeverityFilter === 'all' || 
+      (threatSeverityFilter === 'critical' && (t.severity === 'critical' || t.severity === 'high')) ||
+      (threatSeverityFilter === 'high' && (t.severity === 'high' || t.severity === 'critical')) ||
+      (threatSeverityFilter === 'medium' && t.severity === 'medium') ||
+      (threatSeverityFilter === 'low' && t.severity === 'low') ||
+      t.severity === threatSeverityFilter;
+
+    return matchesSearch && matchesSeverity;
+  });
+
   // Navigation Items
   const navItems: { id: TabType; label: string; icon: any; badge?: number }[] = [
     { id: 'overview', label: 'Métricas & Telemetría', icon: Activity },
     { id: 'ws_monitor', label: 'Monitor WS (Tiempo Real)', icon: Radar },
     { id: 'users', label: 'Gestión de Usuarios', icon: Users, badge: users.length },
     { id: 'rooms', label: 'Salas & Espacios', icon: MessageSquare, badge: roomsList.length },
+    { id: 'forensics', label: 'Expedientes Forenses Ley Arg', icon: Scale, badge: forensicCases.length },
     { id: 'threats', label: 'Amenazas & IP Ban', icon: ShieldAlert, badge: threats.filter(t => t.blocked).length },
     { id: 'logs', label: 'Auditoría & Logs', icon: Terminal, badge: logs.length },
     { id: 'ai_assistant', label: 'Aether AI Guard', icon: Sparkles },
@@ -861,8 +958,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
                         </tr>
                       ) : (
-                        filteredUsers.map(u => (
-                          <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
+                        filteredUsers.map((u, idx) => (
+                          <tr key={u.id ? `${u.id}-${idx}` : `usr-${idx}`} className="hover:bg-slate-800/30 transition-colors">
                             {/* User Info */}
                             <td className="p-4">
                               <div className="flex items-center gap-3">
@@ -895,7 +992,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                             {/* Premium Plan */}
                             <td className="p-4">
-                              {u.isPremium ? (
+                              {u.planTier === 'cyber_elite' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com') ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                  <Zap className="w-3 h-3 text-cyan-400" />
+                                  <span>CYBER ELITE</span>
+                                </span>
+                              ) : u.isPremium || u.planTier === 'premium' ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                                   <Crown className="w-3 h-3 text-amber-400" />
                                   <span>PREMIUM</span>
@@ -1028,10 +1130,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     No hay salas registradas que coincidan con el filtro.
                   </div>
                 ) : (
-                  filteredRooms.map(r => {
+                  filteredRooms.map((r, idx) => {
                     const mode = r.accessMode || (r.isClosed ? 'closed' : (r.isPrivate ? 'open' : 'global'));
                     return (
-                      <div key={r.id} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all space-y-4 shadow-lg flex flex-col justify-between">
+                      <div key={r.id ? `${r.id}-${idx}` : `room-${idx}`} className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all space-y-4 shadow-lg flex flex-col justify-between">
                         <div className="space-y-3">
                           <div className="flex items-start justify-between gap-2">
                             <div>
@@ -1345,8 +1447,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             const matchesSeverity = bannedSeverityFilter === 'all' || b.severity === bannedSeverityFilter;
                             return matchesSearch && matchesSeverity;
                           })
-                          .map(b => (
-                            <tr key={b.id || b.ip} className="hover:bg-slate-800/30 transition-colors">
+                          .map((b, idx) => (
+                            <tr key={b.id ? `${b.id}-${idx}` : `banned-${b.ip}-${idx}`} className="hover:bg-slate-800/30 transition-colors">
                               <td className="p-3 font-mono font-bold text-rose-300 flex items-center gap-2">
                                 <Ban className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                                 <span>{b.ip}</span>
@@ -1405,14 +1507,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               {/* Threat Logs List (WAF Auto Detections) */}
-              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl space-y-3 p-5">
-                <div className="flex items-center justify-between">
+              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl space-y-4 p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-black text-white flex items-center gap-2">
                       <Radar className="w-4 h-4 text-amber-400" />
-                      Registro de Detecciones WAF ({threats.length})
+                      <span>Registro de Detecciones WAF ({filteredThreats.length} / {threats.length})</span>
                     </h3>
                     <p className="text-slate-400 text-xs mt-0.5">Alertas automáticas generadas por el motor de detección de amenazas.</p>
+                  </div>
+
+                  {/* Search & Severity Filter Selectors */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                      <input 
+                        type="text"
+                        placeholder="Buscar IP, razón o tipo..."
+                        value={threatSearch}
+                        onChange={e => setThreatSearch(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-amber-500 outline-none w-48 sm:w-60"
+                      />
+                    </div>
+
+                    <select
+                      value={threatSeverityFilter}
+                      onChange={e => setThreatSeverityFilter(e.target.value as any)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-amber-400 font-bold outline-none focus:border-amber-500"
+                    >
+                      <option value="all">🛡️ Todas las Severidades</option>
+                      <option value="critical">🚨 Crítica / Alta (Critical/High)</option>
+                      <option value="high">🔥 Alta (High)</option>
+                      <option value="medium">⚠️ Media (Medium)</option>
+                      <option value="low">ℹ️ Baja (Low)</option>
+                    </select>
+
+                    {(threatSearch || threatSeverityFilter !== 'all') && (
+                      <button 
+                        onClick={() => { setThreatSearch(''); setThreatSeverityFilter('all'); }}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold transition-all"
+                      >
+                        Limpiar
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1428,23 +1565,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 text-xs">
-                      {threats.length === 0 ? (
+                      {filteredThreats.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-6 text-center text-slate-500 font-medium">No se registran amenazas detectadas.</td>
+                          <td colSpan={5} className="p-6 text-center text-slate-500 font-medium">No se registran amenazas que coincidan con los filtros aplicados.</td>
                         </tr>
                       ) : (
-                        threats.map(t => (
-                          <tr key={t.id} className="hover:bg-slate-800/30 transition-colors">
+                        filteredThreats.map((t, idx) => (
+                          <tr key={t.id ? `${t.id}-${idx}` : `threat-${t.ip}-${idx}`} className="hover:bg-slate-800/30 transition-colors">
                             <td className="p-3 font-mono text-cyan-400">{t.ip}</td>
                             <td className="p-3 font-semibold text-white">{t.threatType}</td>
                             <td className="p-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                t.severity === 'high' || t.severity === 'critical' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
+                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${
+                                t.severity === 'critical' ? 'bg-rose-600/30 text-rose-300 border border-rose-500/40 animate-pulse' :
+                                t.severity === 'high' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                                t.severity === 'medium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                'bg-slate-800 text-slate-400 border border-slate-700'
                               }`}>
-                                {t.severity}
+                                {t.severity === 'critical' ? '🚨 CRÍTICA' : t.severity === 'high' ? '🔥 ALTA' : t.severity === 'medium' ? '⚠️ MEDIA' : 'ℹ️ BAJA'}
                               </span>
                             </td>
-                            <td className="p-3 text-slate-400 text-[11px] max-w-xs truncate">{t.reason}</td>
+                            <td className="p-3 text-slate-300 text-[11px] max-w-xs truncate">{t.reason}</td>
                             <td className="p-3 text-right">
                               <button 
                                 onClick={() => handleUnbanIp(t.ip)}
@@ -1460,6 +1600,157 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </table>
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* TAB 4.5: FORENSIC DOSSIERS (ARGENTINE PENAL LAW AUDIT) */}
+          {activeTab === 'forensics' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                    <Scale className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                      <span>Expedientes Forenses (Ley Argentina)</span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30">
+                        {forensicCases.length} Incautaciones
+                      </span>
+                    </h2>
+                    <p className="text-slate-400 text-xs sm:text-sm">
+                      Salas clausuradas e incautadas automáticamente por violaciones al Código Penal de la República Argentina.
+                    </p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={fetchForensics}
+                  disabled={loadingForensics}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all self-start sm:self-auto"
+                >
+                  <RefreshCw className={`w-4 h-4 text-amber-400 ${loadingForensics ? 'animate-spin' : ''}`} />
+                  <span>Actualizar Expedientes</span>
+                </button>
+              </div>
+
+              {/* Search input */}
+              <div className="relative max-w-md">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                <input 
+                  type="text"
+                  placeholder="Buscar por ID de expediente, sala, infractor o artículo..."
+                  value={forensicSearch}
+                  onChange={e => setForensicSearch(e.target.value)}
+                  className="w-full bg-slate-900/80 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-amber-500 outline-none"
+                />
+              </div>
+
+              {/* Grid of Forensic Case Dossiers */}
+              {loadingForensics ? (
+                <div className="p-12 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800">
+                  Cargando expedientes judicializados...
+                </div>
+              ) : filteredForensics.length === 0 ? (
+                <div className="p-12 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800 space-y-2">
+                  <FileCheck className="w-10 h-10 text-slate-600 mx-auto" />
+                  <div className="text-sm font-bold text-slate-400">Sin expedientes forenses registrados</div>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Cuando el WAF detecte contenido penal e incaute una sala, el acta completa de la transcripción se guardará aquí de forma permanente.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredForensics.map((item, idx) => (
+                    <div 
+                      key={item.id ? `${item.id}-${idx}` : `forensic-${idx}`} 
+                      className="bg-slate-900/80 border border-amber-500/20 hover:border-amber-500/40 rounded-2xl p-5 space-y-4 shadow-xl transition-all relative overflow-hidden"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-black uppercase border border-rose-500/30">
+                              INCAUTADA Y BANEADA
+                            </span>
+                            <span className="text-[11px] font-mono text-slate-400">
+                              ID: {item.id}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-black text-white mt-1 flex items-center gap-2">
+                            <Gavel className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span>{item.roomName}</span>
+                          </h3>
+                        </div>
+
+                        <button 
+                          onClick={() => handleDeleteForensicCase(item.id)}
+                          className="p-2 rounded-xl bg-slate-950/60 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-500/30 transition-all"
+                          title="Eliminar Expediente"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Legal Articles Pills */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.lawArticles && item.lawArticles.map((art, idx) => (
+                          <span key={idx} className="px-2.5 py-1 rounded-lg bg-amber-950/50 border border-amber-500/30 text-amber-300 text-[11px] font-extrabold flex items-center gap-1">
+                            <Scale className="w-3 h-3 text-amber-400" />
+                            <span>{art}</span>
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Infractor Info */}
+                      <div className="bg-slate-950/70 rounded-xl p-3 border border-slate-800/80 space-y-1.5 text-xs">
+                        <div className="flex justify-between text-slate-400">
+                          <span className="font-bold">Infractor Identificado:</span>
+                          <span className="text-rose-400 font-mono font-bold">{item.offenderName} ({item.offenderEmail})</span>
+                        </div>
+                        <div className="flex justify-between text-slate-400">
+                          <span className="font-bold">IP Origen Sancionada:</span>
+                          <span className="text-cyan-400 font-mono">{item.offenderIp}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-400">
+                          <span className="font-bold">Participantes Expulsados:</span>
+                          <span className="text-amber-300 font-bold">{item.usersExpelledCount || 0} usuarios</span>
+                        </div>
+                      </div>
+
+                      {/* Evidence Snippet */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-extrabold uppercase text-slate-400">Motivo / Evidencia Flagrante</label>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-rose-300 font-mono truncate">
+                          {item.violationSummary}: "{item.evidenceSnippet}"
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                        <button 
+                          onClick={() => setSelectedCaseModal(item)}
+                          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold text-xs shadow-lg transition-all flex items-center justify-center gap-2"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>Ver Acta Completa</span>
+                        </button>
+                        <button 
+                          onClick={() => downloadTranscriptFile(item)}
+                          className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5"
+                          title="Descargar (.txt)"
+                        >
+                          <Download className="w-4 h-4 text-cyan-400" />
+                          <span className="hidden sm:inline">Descargar</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -1496,8 +1787,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <td colSpan={5} className="p-8 text-center text-slate-500">No hay registros de auditoría disponibles.</td>
                         </tr>
                       ) : (
-                        logs.map(l => (
-                          <tr key={l.id} className="hover:bg-slate-800/30 transition-colors">
+                        logs.map((l, idx) => (
+                          <tr key={l.id ? `${l.id}-${idx}` : `log-${idx}`} className="hover:bg-slate-800/30 transition-colors">
                             <td className="p-4 font-mono text-cyan-400">{l.ip}</td>
                             <td className="p-4 font-bold text-white">{l.action}</td>
                             <td className="p-4 text-slate-400 text-[11px] max-w-xs truncate">{l.details || l.userEmail || '-'}</td>
@@ -1589,40 +1880,121 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="flex items-center gap-3">
                 <Crown className="w-8 h-8 text-amber-400" />
                 <div>
-                  <h2 className="text-2xl font-black text-white">Planes & Suscripciones Premium</h2>
-                  <p className="text-slate-400 text-xs sm:text-sm">Otorgar o remover membresías VIP Premium a usuarios.</p>
+                  <h2 className="text-2xl font-black text-white">Planes & Suscripciones VIP / Cyber Elite</h2>
+                  <p className="text-slate-400 text-xs sm:text-sm">Otorgar o modificar planes de usuario directamente con facturación activada.</p>
                 </div>
+              </div>
+
+              {/* Quick Direct Plan Assigner */}
+              <div className="bg-slate-900/80 p-6 rounded-2xl border border-amber-500/30 space-y-4 shadow-xl">
+                <h3 className="text-xs font-black uppercase text-amber-300 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  <span>Asignación Directa Inmediata de Plan</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Seleccionar Usuario</label>
+                    <select 
+                      value={quickPlanUserId}
+                      onChange={e => setQuickPlanUserId(e.target.value)}
+                      className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
+                    >
+                      <option value="">-- Seleccionar Usuario --</option>
+                      {users.map((u, idx) => {
+                        const isCyber = u.planTier === 'cyber_elite' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com');
+                        const tierDisplay = isCyber ? 'cyber_elite' : (u.planTier || (u.isPremium ? 'premium' : 'free'));
+                        return (
+                          <option key={u.id ? `${u.id}-${idx}` : `opt-${idx}`} value={u.id}>
+                            {u.name} ({u.email}) - [{tierDisplay.toUpperCase()}]
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Nivel de Plan</label>
+                    <select 
+                      value={quickPlanTier}
+                      onChange={e => setQuickPlanTier(e.target.value as any)}
+                      className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-amber-300 font-extrabold outline-none focus:border-amber-500"
+                    >
+                      <option value="cyber_elite">⚡ Cyber Elite Ultra (VIP Total)</option>
+                      <option value="premium">👑 Aether Premium VIP</option>
+                      <option value="free">🛡️ Básico / Gratuito</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase">Duración (Días)</label>
+                    <input 
+                      type="number"
+                      value={quickPlanDays}
+                      onChange={e => setQuickPlanDays(Number(e.target.value))}
+                      min={1}
+                      className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    if (!quickPlanUserId) {
+                      showToast("Por favor selecciona un usuario", "error");
+                      return;
+                    }
+                    handleDirectPlanAssign(quickPlanUserId, quickPlanTier, quickPlanDays);
+                  }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold text-xs shadow-lg shadow-amber-950/40 transition-all flex items-center justify-center gap-2"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Aplicar Cambio de Plan & Notificar por Correo</span>
+                </button>
               </div>
 
               {/* Premium List */}
               <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-4">
-                <h3 className="text-xs font-bold uppercase text-slate-400">Usuarios Premium Actuales</h3>
+                <h3 className="text-xs font-bold uppercase text-slate-400">Usuarios Premium & Cyber Elite Actuales</h3>
                 <div className="space-y-2">
-                  {users.filter(u => u.isPremium).length === 0 ? (
-                    <div className="p-4 text-center text-slate-500 text-xs">No hay usuarios con plan Premium activo.</div>
+                  {users.filter(u => u.isPremium || u.planTier === 'cyber_elite' || u.planTier === 'premium' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com')).length === 0 ? (
+                    <div className="p-4 text-center text-slate-500 text-xs">No hay usuarios con plan VIP / Cyber Elite activo.</div>
                   ) : (
-                    users.filter(u => u.isPremium).map(u => (
-                      <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-                        <div className="flex items-center gap-3">
-                          <Crown className="w-4 h-4 text-amber-400" />
-                          <div>
-                            <div className="text-xs font-bold text-white">{u.name}</div>
-                            <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
+                    users.filter(u => u.isPremium || u.planTier === 'cyber_elite' || u.planTier === 'premium' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com')).map((u, idx) => {
+                      const isCyber = u.planTier === 'cyber_elite' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com');
+                      return (
+                        <div key={u.id ? `${u.id}-${idx}` : `prem-${idx}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                          <div className="flex items-center gap-3">
+                            {isCyber ? (
+                              <Zap className="w-4 h-4 text-cyan-400 animate-pulse" />
+                            ) : (
+                              <Crown className="w-4 h-4 text-amber-400" />
+                            )}
+                            <div>
+                              <div className="text-xs font-bold text-white flex items-center gap-2">
+                                <span>{u.name}</span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                  isCyber ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                }`}>
+                                  {isCyber ? '⚡ Cyber Elite Ultra' : '👑 Premium VIP'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-amber-300 font-mono">
+                              Expira: {u.premiumExpiresAt ? new Date(u.premiumExpiresAt).toLocaleDateString() : 'Indefinido'}
+                            </span>
+                            <button 
+                              onClick={() => openEditUser(u)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 text-xs font-bold hover:bg-slate-700"
+                            >
+                              Editar
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] text-amber-300 font-mono">
-                            Expira: {u.premiumExpiresAt ? new Date(u.premiumExpiresAt).toLocaleDateString() : 'Indefinido'}
-                          </span>
-                          <button 
-                            onClick={() => openEditUser(u)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 text-xs font-bold hover:bg-slate-700"
-                          >
-                            Editar
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -1852,20 +2224,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
 
                 <div className="pt-2 border-t border-slate-800 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-amber-300">
-                    <input 
-                      type="checkbox" 
-                      checked={editIsPremium} 
-                      onChange={e => setEditIsPremium(e.target.checked)} 
-                      className="rounded border-slate-800 bg-slate-950 text-amber-500 focus:ring-0"
-                    />
-                    <Crown className="w-4 h-4 text-amber-400" />
-                    <span>Membresía Premium Activa</span>
-                  </label>
+                  <div>
+                    <label className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      <span>Plan & Suscripción VIP</span>
+                    </label>
+                    <select 
+                      value={editPlanTier}
+                      onChange={e => setEditPlanTier(e.target.value as PlanTier)}
+                      className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-amber-300 outline-none"
+                    >
+                      <option value="free">🛡️ Básico / Gratuito</option>
+                      <option value="premium">👑 Aether Premium VIP</option>
+                      <option value="cyber_elite">⚡ Cyber Elite Ultra (Total)</option>
+                    </select>
+                  </div>
 
-                  {editIsPremium && (
+                  {editPlanTier !== 'free' && (
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-400">Días de Duración Premium</label>
+                      <label className="text-[11px] font-semibold text-slate-400">Días de Duración del Plan</label>
                       <input 
                         type="number" 
                         value={editPremiumDays} 
@@ -2128,6 +2505,66 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs"
                 >
                   Eliminar Sala
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: FORENSIC CASE FULL TRANSCRIPT DOSSIER */}
+      <AnimatePresence>
+        {selectedCaseModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-slate-900 border border-amber-500/40 rounded-2xl p-6 w-full max-w-3xl space-y-4 shadow-2xl text-slate-100 max-h-[85vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                    <Scale className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-white">Acta Forense Judicial - {selectedCaseModal.roomName}</h3>
+                    <p className="text-xs text-slate-400">ID Expediente: {selectedCaseModal.id}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedCaseModal(null)} className="hover:opacity-75">
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+
+              {/* Legal Articles */}
+              <div className="flex flex-wrap gap-1.5 shrink-0">
+                {selectedCaseModal.lawArticles && selectedCaseModal.lawArticles.map((art, idx) => (
+                  <span key={idx} className="px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-amber-300 text-xs font-bold">
+                    ⚖️ {art}
+                  </span>
+                ))}
+              </div>
+
+              {/* Full Transcript Scrollable Terminal Box */}
+              <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-y-auto font-mono text-xs text-slate-300 whitespace-pre-wrap leading-relaxed select-text">
+                {selectedCaseModal.fullTranscript}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800 shrink-0">
+                <button 
+                  onClick={() => downloadTranscriptFile(selectedCaseModal)}
+                  className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Descargar Expediente (.txt)</span>
+                </button>
+                <button 
+                  onClick={() => setSelectedCaseModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs"
+                >
+                  Cerrar
                 </button>
               </div>
             </motion.div>

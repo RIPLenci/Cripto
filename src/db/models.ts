@@ -19,6 +19,7 @@ export interface IUser extends Document {
   createdAt: number;
   isBanned: boolean;
   isPremium?: boolean;
+  planTier?: 'free' | 'premium' | 'cyber_elite';
   premiumExpiresAt?: number;
   avatar?: string;
   banReason?: string;
@@ -26,6 +27,7 @@ export interface IUser extends Document {
   banEvidence?: string;
   violations?: number;
   infractions?: any[];
+  ipWhitelist?: string[];
 }
 const UserSchema = new Schema<IUser>({
   id: { type: String, required: true, unique: true, index: true },
@@ -39,13 +41,15 @@ const UserSchema = new Schema<IUser>({
   createdAt: { type: Number, required: true, default: Date.now },
   isBanned: { type: Boolean, required: true, default: false },
   isPremium: { type: Boolean, default: false },
+  planTier: { type: String, default: 'free' },
   premiumExpiresAt: { type: Number },
   avatar: { type: String },
   banReason: { type: String },
   banSeverity: { type: String },
   banEvidence: { type: String },
   violations: { type: Number, default: 0 },
-  infractions: { type: [Object], default: [] }
+  infractions: { type: [Object], default: [] },
+  ipWhitelist: { type: [String], default: [] }
 });
 UserSchema.index({ email: 1 });
 UserSchema.index({ id: 1 });
@@ -90,7 +94,15 @@ export interface IMessage extends Document {
   senderName: string;
   senderEmail?: string;
   encryptedText: string;
+  attachments?: any[];
+  replyTo?: any;
   reactions: any[];
+  selfDestruct?: number;
+  isPinned?: boolean;
+  poll?: any;
+  format?: string;
+  codeLanguage?: string;
+  readBy?: string[];
   time: string;
   timestamp: number;
 }
@@ -101,7 +113,15 @@ const MessageSchema = new Schema<IMessage>({
   senderName: { type: String, required: true },
   senderEmail: { type: String },
   encryptedText: { type: String, required: true },
+  attachments: { type: [Object], default: [] },
+  replyTo: { type: Object },
   reactions: { type: [Object], default: [] },
+  selfDestruct: { type: Number },
+  isPinned: { type: Boolean, default: false },
+  poll: { type: Object },
+  format: { type: String, default: 'markdown' },
+  codeLanguage: { type: String },
+  readBy: { type: [String], default: [] },
   time: { type: String, required: true },
   timestamp: { type: Number, required: true, default: Date.now }
 });
@@ -184,5 +204,46 @@ const SessionSchema = new Schema<ISession>({
 });
 SessionSchema.index({ token: 1 });
 export const SessionModel = mongoose.models.Session || mongoose.model<ISession>('Session', SessionSchema);
+
+// 6. Forensic Seizure / Incident Case Store (Auditoría Forense & Delitos Ley Argentina)
+export interface IForensicCase extends Document {
+  id: string;
+  roomId: string;
+  roomName: string;
+  offenderUserId: string;
+  offenderEmail: string;
+  offenderName: string;
+  offenderIp: string;
+  lawArticles: string[];
+  violationSummary: string;
+  evidenceSnippet: string;
+  fullTranscript: string;
+  messagesJson: any[];
+  timestamp: number;
+  status: 'seized_and_banned';
+  usersExpelledCount: number;
+}
+const ForensicCaseSchema = new Schema<IForensicCase>({
+  id: { type: String, required: true, unique: true, index: true },
+  roomId: { type: String, required: true },
+  roomName: { type: String, required: true },
+  offenderUserId: { type: String, required: true },
+  offenderEmail: { type: String, required: true },
+  offenderName: { type: String, required: true },
+  offenderIp: { type: String, required: true },
+  lawArticles: { type: [String], default: [] },
+  violationSummary: { type: String, required: true },
+  evidenceSnippet: { type: String, required: true },
+  fullTranscript: { type: String, required: true },
+  messagesJson: { type: [Object], default: [] },
+  timestamp: { type: Number, required: true, default: Date.now },
+  status: { type: String, default: 'seized_and_banned' },
+  usersExpelledCount: { type: Number, default: 0 }
+});
+ForensicCaseSchema.index({ id: 1 });
+ForensicCaseSchema.index({ timestamp: -1 });
+ForensicCaseSchema.plugin(fieldEncryption, { fields: ['offenderEmail', 'offenderIp', 'offenderName'], secret });
+export const ForensicCaseModel = mongoose.models.ForensicCase || mongoose.model<IForensicCase>('ForensicCase', ForensicCaseSchema);
+
 
 

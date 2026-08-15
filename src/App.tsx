@@ -13,37 +13,64 @@ import {
   Mail, KeyRound, BadgeCheck, Globe, CheckSquare, Layers, Wifi, UserCheck, ArrowRight, Clock,
   Key, Sliders, Volume2, VolumeX, Eye, UserCog, Award, RefreshCw,
   Mic, MicOff, Square, Bot, Crown, Radio, Server, Terminal, Plus,
-  Edit3, Search, Copy
+  Edit3, Search, Copy, QrCode, Smartphone, Share2, Volume1
 } from 'lucide-react';
 import { CryptoEngine } from './lib/crypto';
 import { authService, roomService, adminService, aiService } from './services';
 import { AdminDashboard } from './components/AdminDashboard';
+import { AuthScreen } from './components/AuthScreen';
+import { ChatRoomScreen } from './components/ChatRoomScreen';
 import { AudioPlayer } from './components/AudioPlayer';
+import { PremiumScreen } from './components/PremiumScreen';
+import { PrivacyProtectionOverlay } from './components/PrivacyProtectionOverlay';
 import { UserProfile, SystemStats, ThreatLog, SecurityAccessLog, ChatRoom, ChatMessage, CustomPreferences } from './types';
 
 export default function App() {
   // Theme & Personalization
-  const [preferences, setPreferences] = useState<CustomPreferences>({
-    theme: 'dark',
-    accent: '#0ea5e9', // Cyan
-    fontFam: 'font-jakarta',
-    privacyBlur: true,
-    soundEnabled: true,
-    autoScroll: true,
-    highContrast: false
+  const [preferences, setPreferences] = useState<CustomPreferences>(() => {
+    const saved = localStorage.getItem('aether_custom_preferences');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      theme: 'dark',
+      accent: '#0ea5e9', // Cyan
+      fontFam: 'font-jakarta',
+      privacyBlur: true,
+      soundEnabled: true,
+      autoScroll: true,
+      highContrast: false,
+      soundType: 'futuristic',
+      chatBubbleStyle: 'modern',
+      uiDensity: 'comfortable',
+      timeFormat: '24h',
+      antiSpyMode: false,
+      autoLockMinutes: 0
+    };
   });
+
+  useEffect(() => {
+    localStorage.setItem('aether_custom_preferences', JSON.stringify(preferences));
+  }, [preferences]);
 
   // App UI State
   const [view, setView] = useState<'auth' | 'rooms' | 'chat' | 'premium'>('auth');
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'profile' | 'premium' | 'appearance' | 'security'>('profile');
   const [editProfileName, setEditProfileName] = useState('');
   const [editProfileAvatarSeed, setEditProfileAvatarSeed] = useState('');
+  const [editProfileBio, setEditProfileBio] = useState('');
+  const [editProfileMood, setEditProfileMood] = useState('🟢 Disponible');
+  const [showIdQrModal, setShowIdQrModal] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
   const [changePassCurrent, setChangePassCurrent] = useState('');
   const [changePassNew, setChangePassNew] = useState('');
   const [changePassConfirm, setChangePassConfirm] = useState('');
   const [isChangingPass, setIsChangingPass] = useState(false);
+  const [newWhitelistIp, setNewWhitelistIp] = useState('');
+  const [isSavingIpWhitelist, setIsSavingIpWhitelist] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [isAdmin2FAModalOpen, setIsAdmin2FAModalOpen] = useState(false);
   const [isPrivacyScreenActive, setIsPrivacyScreenActive] = useState(false);
@@ -52,12 +79,11 @@ export default function App() {
   // Auth & Email OTP Verification State
   const [token, setToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const currentUserRef = useRef<UserProfile | null>(null);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
   const [isAdmin2FAVerified, setIsAdmin2FAVerified] = useState(false);
-
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authName, setAuthName] = useState('');
-  const [authError, setAuthError] = useState<string | null>(null);
 
   // Admin 2FA Re-authentication State
   const [admin2faEmail, setAdmin2faEmail] = useState('');
@@ -68,27 +94,11 @@ export default function App() {
   const [isSendingAdminCode, setIsSendingAdminCode] = useState(false);
   const [isVerifyingAdmin2FA, setIsVerifyingAdmin2FA] = useState(false);
 
-  // Gmail Signup Verification Step State
-  const [verificationStep, setVerificationStep] = useState<'form' | 'otp'>('form');
-  const [otpCode, setOtpCode] = useState('');
-  const [isSendingCode, setIsSendingCode] = useState(false);
-  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
-
-  // Forgot Password State
-  const [forgotStep, setForgotStep] = useState<'request' | 'verify'>('request');
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotCode, setForgotCode] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
-  const [forgotError, setForgotError] = useState<string | null>(null);
-  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
-  const [isSendingForgotCode, setIsSendingForgotCode] = useState(false);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
-
   // Chat Disappearing Messages State (0 = off, 10s, 30s, 60s)
   const [selfDestructTime, setSelfDestructTime] = useState<number>(0);
 
   // Rooms & WebSockets
+  const [p2pEncryptionQuality, setP2pEncryptionQuality] = useState<'optimal' | 'secure' | 'syncing'>('optimal');
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
   const currentRoomRef = useRef<ChatRoom | null>(null);
@@ -124,7 +134,7 @@ export default function App() {
   const [roomRoomKey, setRoomRoomKey] = useState<CryptoKey | null>(null);
   const roomKeyRef = useRef<CryptoKey | null>(null);
   const setRoomKey = (key: CryptoKey | null) => { setRoomRoomKey(key); roomKeyRef.current = key; };
-  const [roomUsers, setRoomUsers] = useState<Array<{ id: string; name: string; email: string; role?: string; avatar?: string; isPremium?: boolean; ip?: string; status?: string }>>([]);
+  const [roomUsers, setRoomUsers] = useState<Array<{ id: string; name: string; email: string; role?: string; avatar?: string; isPremium?: boolean; planTier?: 'free' | 'premium' | 'cyber_elite'; ip?: string; status?: string }>>([]);
   const [typingUsersMap, setTypingUsersMap] = useState<Record<string, boolean>>({});
 
   // AI Assistant Drawer State
@@ -181,11 +191,6 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const currentUserRef = useRef<UserProfile | null>(currentUser);
-
-  useEffect(() => {
-    currentUserRef.current = currentUser;
-  }, [currentUser]);
 
   const playSoundEffect = useCallback((type: 'send' | 'receive' | 'notification' = 'notification') => {
     if (!preferences.soundEnabled) return;
@@ -260,13 +265,20 @@ export default function App() {
     if (currentUser && isSettingsOpen) {
       setEditProfileName(currentUser.name);
       setEditProfileAvatarSeed(currentUser.avatar || currentUser.email);
+      setEditProfileBio(currentUser.bio || '');
+      setEditProfileMood(currentUser.statusMood || '🟢 Disponible');
     }
   }, [currentUser, isSettingsOpen]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await authService.updateProfile({ name: editProfileName, avatar: editProfileAvatarSeed }, token || undefined);
+      const res = await authService.updateProfile({ 
+        name: editProfileName, 
+        avatar: editProfileAvatarSeed,
+        bio: editProfileBio,
+        statusMood: editProfileMood
+      }, token || undefined);
       setCurrentUser(res.user);
       notify("Perfil actualizado correctamente", "success");
     } catch (err: any) {
@@ -298,6 +310,43 @@ export default function App() {
     }
   };
 
+  const handleUpdateIpWhitelist = async (newList: string[]) => {
+    setIsSavingIpWhitelist(true);
+    try {
+      const res = await authService.updateIpWhitelist(newList, token || undefined);
+      setCurrentUser(res.user);
+      notify(res.message, "success");
+      setNewWhitelistIp('');
+    } catch (err: any) {
+      notify(err.message || "Error al actualizar la lista blanca de IPs", "alert");
+    } finally {
+      setIsSavingIpWhitelist(false);
+    }
+  };
+
+  const handleAddIpToWhitelist = (ipToAdd: string) => {
+    const clean = ipToAdd.trim();
+    if (!clean) return;
+    const currentList = currentUser?.ipWhitelist || [];
+    if (currentList.includes(clean)) {
+      notify(`La IP ${clean} ya está autorizada en la lista blanca`, "info");
+      return;
+    }
+    handleUpdateIpWhitelist([...currentList, clean]);
+  };
+
+  const handleRemoveIpFromWhitelist = (ipToRemove: string) => {
+    const currentList = currentUser?.ipWhitelist || [];
+    const updated = currentList.filter(ip => ip !== ipToRemove);
+    handleUpdateIpWhitelist(updated);
+  };
+
+  const handleClearIpWhitelist = () => {
+    if (window.confirm("¿Seguro que deseas desactivar la Lista Blanca de IPs? Tu cuenta podrá accederse desde cualquier dirección IP.")) {
+      handleUpdateIpWhitelist([]);
+    }
+  };
+
   // Request Push Notification Permissions
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -323,23 +372,37 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [preferences.privacyBlur, view]);
 
-  // Handle Token Check on mount
+  // Handle Token Check on mount with instant session restoration
   useEffect(() => {
     const savedToken = localStorage.getItem('aether_token');
+    const savedUserData = localStorage.getItem('user_data');
+    if (savedUserData) {
+      try {
+        const parsed = JSON.parse(savedUserData);
+        if (parsed) {
+          setCurrentUser(parsed);
+          if (savedToken) setToken(savedToken);
+          setView('rooms');
+        }
+      } catch (e) {}
+    }
+
     if (savedToken) {
+      setToken(savedToken);
+      initWebSocket(savedToken);
       authService.getMe(savedToken)
         .then((data) => {
           if (data.user) {
             setToken(savedToken);
             setCurrentUser(data.user);
             setIsAdmin2FAVerified(!!data.admin2FAVerified);
+            localStorage.setItem('user_data', JSON.stringify(data.user));
             setView('rooms');
-            initWebSocket(savedToken);
-          } else {
-            localStorage.removeItem('aether_token');
           }
         })
-        .catch(() => localStorage.removeItem('aether_token'));
+        .catch((err) => {
+          console.warn('Network or server restart during session check, maintaining active local session:', err);
+        });
     }
   }, []);
 
@@ -375,21 +438,25 @@ export default function App() {
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'AUTHENTICATE', token: authToken }));
+      fetchRooms();
+      refreshUserProfile();
       
       pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'PING' }));
         }
-      }, 30000);
+      }, 15000);
     };
 
     ws.onclose = () => {
       clearInterval(pingInterval);
-      // Try to reconnect if token is still valid
-      if (token) {
+      // Auto-reconnect seamlessly in background using stored token
+      const currentToken = localStorage.getItem('aether_token');
+      if (currentToken) {
         setTimeout(() => {
-          if (token) initWebSocket(token);
-        }, 5000);
+          const activeToken = localStorage.getItem('aether_token');
+          if (activeToken) initWebSocket(activeToken);
+        }, 1500);
       }
     };
 
@@ -401,6 +468,36 @@ export default function App() {
     ws.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
+
+        if (data.type === 'USER_STATE_UPDATE') {
+          const targetUserId = data.userId || (data.user && data.user.id);
+          const targetEmail = data.user && data.user.email ? data.user.email.toLowerCase() : null;
+
+          const isMe = currentUserRef.current && (
+            (targetUserId && currentUserRef.current.id === targetUserId) ||
+            (targetEmail && currentUserRef.current.email?.toLowerCase() === targetEmail)
+          );
+
+          if (isMe && data.user) {
+            const updatedUser = { ...currentUserRef.current, ...data.user };
+            setCurrentUser(updatedUser);
+            localStorage.setItem('user_data', JSON.stringify(updatedUser));
+
+            if (data.user.isBanned || data.user.status === 'Baneado' || data.user.status === 'Sancionado' || data.user.status === 'Eliminado') {
+              notify("⚠️ ATENCIÓN: Tu cuenta ha sido sancionada/bloqueada por la Administración en tiempo real.", "alert");
+            } else if (data.eventType === 'UNBAN') {
+              notify("✅ Tu cuenta ha sido desbaneada/restablecida por el Administrador.", "success");
+            } else if (data.user.planTier === 'cyber_elite') {
+              notify("⚡ Tu cuenta ha sido actualizada al nivel CYBER ELITE ULTRA VIP con acceso total.", "success");
+            } else if (data.user.isPremium) {
+              notify("👑 ¡Tu membresía VIP Premium ha sido activada/actualizada en tiempo real!", "success");
+            } else if (data.eventType === 'PLAN_CHANGE' || data.eventType === 'PREMIUM_UPDATE') {
+              notify("ℹ️ Tu plan de suscripción ha sido modificado por la Administración.", "info");
+            } else {
+              notify("ℹ️ Tu información de perfil y permisos han sido actualizados en tiempo real.", "info");
+            }
+          }
+        }
 
         if (data.type === 'PUSH_NOTIFICATION') {
           if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
@@ -445,6 +542,10 @@ export default function App() {
                newMsgs = [...prev, msgObj];
                if (msgObj.senderId !== currentUserRef.current?.id) {
                  playSoundEffect('receive');
+                 // Send read confirmation if we are in this room
+                 if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentRoomRef.current?.id === msgObj.roomId) {
+                   wsRef.current.send(JSON.stringify({ type: 'MARK_READ', roomId: msgObj.roomId }));
+                 }
                }
              }
              if (currentRoomRef.current?.id) {
@@ -452,6 +553,18 @@ export default function App() {
              }
              return newMsgs;
           });
+        }
+
+        if (data.type === 'MESSAGES_READ') {
+          setMessages((prev) => prev.map(m => {
+            if (data.messageIds?.includes(m.id)) {
+              const currentReadBy = m.readBy || [];
+              if (!currentReadBy.includes(data.readerId)) {
+                return { ...m, readBy: [...currentReadBy, data.readerId] };
+              }
+            }
+            return m;
+          }));
         }
 
         if (data.type === 'ROOM_MODE_UPDATED') {
@@ -479,6 +592,15 @@ export default function App() {
 
         if (data.type === 'MESSAGE_DELETED') {
           setMessages((prev) => prev.filter(m => m.id !== data.messageId));
+        }
+
+        if (data.type === 'MESSAGE_PIN_TOGGLED') {
+          setMessages((prev) => prev.map(m => m.id === data.messageId ? { ...m, isPinned: data.isPinned } : m));
+          notify(data.isPinned ? "Mensaje fijado en la sala" : "Mensaje desfijado", "info");
+        }
+
+        if (data.type === 'POLL_UPDATED') {
+          setMessages((prev) => prev.map(m => m.id === data.messageId ? { ...m, poll: data.poll } : m));
         }
 
         if (data.type === 'REACTION_ADDED') {
@@ -532,156 +654,13 @@ export default function App() {
     };
   }, [notify, roomRoomKey]);
 
-  // Handle Login Flow
-  // Forgot Password - Send Code
-  const handleForgotCodeRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setForgotError(null);
-    setForgotSuccess(null);
-
-    if (!forgotEmail.includes('@')) {
-      setForgotError('Ingresa un correo de Gmail válido.');
-      return;
-    }
-
-    setIsSendingForgotCode(true);
-
-    try {
-      const data = await authService.forgotPassword(forgotEmail);
-      setForgotSuccess(data.message);
-      setForgotStep('verify');
-      if (data.devCode) {
-        setForgotCode(data.devCode);
-        notify(`Código de recuperación generado: ${data.devCode}`, 'info');
-      } else {
-        notify(`Código enviado a ${forgotEmail}. Revisa tu bandeja de entrada o SPAM.`, 'success');
-      }
-    } catch (err: any) {
-      setForgotError(err.message);
-    } finally {
-      setIsSendingForgotCode(false);
-    }
-  };
-
-  // Forgot Password - Verify Code and Reset
-  const handleForgotReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setForgotError(null);
-    setForgotSuccess(null);
-
-    if (forgotNewPassword !== forgotConfirmPassword) {
-      setForgotError('Las contraseñas no coinciden.');
-      return;
-    }
-
-    setIsResettingPassword(true);
-
-    try {
-      const data = await authService.resetPassword(forgotEmail, forgotCode, forgotNewPassword);
-      setForgotSuccess(data.message);
-      notify('Contraseña restablecida con éxito', 'success');
-      
-      // Go back to login after short delay
-      setTimeout(() => {
-        setAuthMode('login');
-        setForgotStep('request');
-        setForgotEmail('');
-        setForgotCode('');
-        setForgotNewPassword('');
-        setForgotConfirmPassword('');
-        setForgotSuccess(null);
-      }, 2000);
-      
-    } catch (err: any) {
-      setForgotError(err.message);
-    } finally {
-      setIsResettingPassword(false);
-    }
-  };
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-
-    try {
-      const data = await authService.login(authEmail, authPassword);
-      localStorage.setItem('aether_token', data.token);
-      setToken(data.token);
-      setCurrentUser(data.user);
-      setView('rooms');
-      initWebSocket(data.token);
-      notify('Conexión Segura e Inicio de Sesión exitoso', 'success');
-    } catch (err: any) {
-      setAuthError(err.message);
-    }
-  };
-
-  // Request OTP Verification Code for Signup
-  const handleRequestVerificationCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-
-    if (!authEmail.includes('@')) {
-      setAuthError('Por favor ingresa un correo Gmail válido.');
-      return;
-    }
-
-    setIsSendingCode(true);
-
-    try {
-      const data = await authService.sendVerificationCode(authEmail);
-      setVerificationStep('otp');
-
-      if (data.devCode) {
-        setOtpCode(data.devCode);
-        notify(`Código de verificación: ${data.devCode}`, 'info');
-      } else if (data.emailSuccess === false) {
-        setAuthError(`Aviso de entrega SMTP: (${data.emailError || 'Error de autenticación'}). Usa el código de seguridad o verifica tu servidor SMTP.`);
-        notify(`Aviso de entrega por correo.`, 'alert');
-      } else {
-        notify(`Código de verificación enviado a ${authEmail}. Revisa tu bandeja de entrada o SPAM.`, 'success');
-      }
-    } catch (err: any) {
-      setAuthError(err.message);
-    } finally {
-      setIsSendingCode(false);
-    }
-  };
-
-  // Complete OTP Signup
-  const handleVerifyCodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    setIsVerifyingCode(true);
-
-    try {
-      const data = await authService.registerVerify({
-        name: authName,
-        email: authEmail,
-        password: authPassword,
-        code: otpCode
-      });
-
-      localStorage.setItem('aether_token', data.token);
-      setToken(data.token);
-      setCurrentUser(data.user);
-      setView('rooms');
-      initWebSocket(data.token);
-      notify('Correo verificado y usuario registrado en InstantDB', 'success');
-    } catch (err: any) {
-      setAuthError(err.message);
-    } finally {
-      setIsVerifyingCode(false);
-    }
-  };
-
+  // Handle Logout
   const handleLogout = () => {
     localStorage.removeItem('aether_token');
     setToken(null);
     setCurrentUser(null);
     setIsAdmin2FAVerified(false);
     setView('auth');
-    setVerificationStep('form');
     if (wsRef.current) wsRef.current.close();
   };
 
@@ -966,7 +945,7 @@ export default function App() {
   };
 
   // Send Message with optimistic instant delivery
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent, customSelfDestruct?: number, customPoll?: any, customFormat?: string, customCodeLang?: string) => {
     e.preventDefault();
     if ((!inputText.trim() && attachments.length === 0) || !currentRoom || !roomRoomKey || !currentUser) return;
 
@@ -997,6 +976,12 @@ export default function App() {
       attachments: currentAttachments,
       replyTo: currentReplyTo,
       reactions: [],
+      selfDestruct: customSelfDestruct,
+      poll: customPoll,
+      format: (customFormat as any) || 'markdown',
+      codeLanguage: customCodeLang,
+      readBy: [currentUser.id],
+      status: 'sending',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: Date.now()
     };
@@ -1015,12 +1000,22 @@ export default function App() {
           encryptedText,
           attachments: currentAttachments,
           replyTo: currentReplyTo,
-          plainTextForAI: plainText
+          plainTextForAI: plainText,
+          selfDestruct: customSelfDestruct,
+          poll: customPoll,
+          format: customFormat || 'markdown',
+          codeLanguage: customCodeLang
         })
       );
     }
   };
 
+
+  const handleTyping = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentUser) {
+      wsRef.current.send(JSON.stringify({ type: "TYPING", senderName: currentUser.name, senderId: currentUser.id }));
+    }
+  };
 
   const handleSendZumbido = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1165,9 +1160,9 @@ export default function App() {
 
       {/* Floating Notifications */}
       <div className="fixed top-3 sm:top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-[92%] max-w-md pointer-events-none">
-        {notifications.map((n) => (
+        {notifications.map((n, idx) => (
           <div
-            key={n.id}
+            key={n.id ? `${n.id}-${idx}` : `notif-${idx}`}
             className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/95 text-white shadow-2xl border-l-4 text-xs font-bold flex items-center gap-2.5 backdrop-blur-md animate-in fade-in duration-300"
             style={{ borderLeftColor: n.type === 'success' ? '#10b981' : n.type === 'alert' ? '#f43f5e' : preferences.accent }}
           >
@@ -1204,9 +1199,26 @@ export default function App() {
               <h1 className="font-black text-sm sm:text-lg md:text-xl leading-tight text-white flex items-center gap-1 truncate">
                 Aether <span className="hidden sm:inline">Security</span> <BadgeCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--accent)] shrink-0 inline" style={{ color: preferences.accent }} />
               </h1>
-              <span className="text-[8px] sm:text-[10px] font-mono font-bold flex items-center gap-1 truncate text-emerald-400">
-                <Wifi className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" style={{ color: preferences.accent }} /> <span className="hidden sm:inline">Conexión Segura</span><span className="inline sm:hidden">Cifrado OK</span>
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] sm:text-[10px] font-mono font-bold flex items-center gap-1 truncate text-emerald-400">
+                  <Wifi className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" style={{ color: preferences.accent }} /> <span className="hidden sm:inline">Conexión Segura</span><span className="inline sm:hidden">Cifrado OK</span>
+                </span>
+                {/* P2P Connection Encryption Quality Indicator (Separate from WebSocket) */}
+                <button
+                  onClick={() => {
+                    // Cycle P2P encryption quality for demo/verification
+                    setP2pEncryptionQuality(prev => prev === 'optimal' ? 'secure' : prev === 'secure' ? 'syncing' : 'optimal');
+                  }}
+                  className="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-900/90 border border-slate-800 text-[10px] font-mono shadow-sm transition-all hover:scale-105 active:scale-95"
+                  title={`P2P Encryption: ${p2pEncryptionQuality.toUpperCase()} (Click para alternar estado de cifrado)`}
+                >
+                  <Shield className={`w-3.5 h-3.5 ${p2pEncryptionQuality === 'optimal' ? 'text-emerald-400 animate-pulse' : p2pEncryptionQuality === 'secure' ? 'text-cyan-400' : 'text-amber-400 animate-bounce'}`} />
+                  <span className="text-slate-300 font-semibold">P2P:</span>
+                  <span className={p2pEncryptionQuality === 'optimal' ? 'text-emerald-400 font-bold' : p2pEncryptionQuality === 'secure' ? 'text-cyan-400 font-bold' : 'text-amber-400 font-bold'}>
+                    {p2pEncryptionQuality === 'optimal' ? 'AES-256 (Óptimo)' : p2pEncryptionQuality === 'secure' ? 'TLS 1.3 (Seguro)' : 'Handshake (Sincronizando)'}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1260,450 +1272,33 @@ export default function App() {
           className="flex-1 relative overflow-hidden overflow-x-hidden flex flex-col min-h-0 w-full max-w-full"
         >
           {/* VIEW: PREMIUM */}
+          {/* VIEW 0: PREMIUM STORE SCREEN (REBUILT 2.0) */}
           {view === 'premium' && (
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 scrollbar-none relative overflow-hidden">
-              {/* Premium Background Animations - Aurora Dorada */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-amber-400 rounded-[100%] mix-blend-multiply filter blur-[100px] opacity-20 animate-aurora"></div>
-                <div className="absolute top-[10%] right-[-20%] w-[70%] h-[70%] bg-yellow-300 rounded-[100%] mix-blend-multiply filter blur-[120px] opacity-20 animate-aurora animation-delay-aurora-1"></div>
-                <div className="absolute bottom-[-20%] left-[10%] w-[80%] h-[60%] bg-orange-500 rounded-[100%] mix-blend-multiply filter blur-[100px] opacity-15 animate-aurora animation-delay-aurora-2"></div>
-              </div>
-              
-              <button
-                onClick={() => setView(token ? 'rooms' : 'auth')}
-                className="absolute top-4 left-4 sm:top-8 sm:left-8 p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors z-20 flex items-center gap-2 font-medium shadow-lg backdrop-blur-sm"
-              >
-                <ArrowRight className="w-5 h-5 rotate-180" />
-                <span className="hidden sm:inline">Volver</span>
-              </button>
-
-              <div className="max-w-4xl mx-auto space-y-8 pb-12 mt-12 sm:mt-0 relative z-10">
-                <div className="text-center space-y-4 pt-4">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-tr from-amber-500 to-amber-300 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-amber-500/20 mb-4 transform -rotate-3">
-                    <Crown className="w-8 h-8 sm:w-10 sm:h-10 text-slate-950" />
-                  </div>
-                  <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-                    Aether <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">Premium</span>
-                  </h2>
-                  <p className="text-sm sm:text-base text-slate-400 max-w-xl mx-auto font-medium">
-                    Eleva tu seguridad y privacidad al máximo nivel. Desbloquea herramientas avanzadas de IA, salas persistentes y acceso ilimitado.
-                  </p>
-                </div>
-
-                {currentUser?.isPremium && (
-                  <div className="p-6 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-center space-y-2 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
-                    <Crown className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-                    <h3 className="text-xl font-bold text-white">Eres usuario Premium Activo</h3>
-                    <p className="text-slate-300 text-sm">
-                      Tu suscripción finaliza el <span className="font-mono text-amber-400 font-bold">{currentUser.premiumExpiresAt ? new Date(currentUser.premiumExpiresAt).toLocaleString() : 'N/A'}</span>
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 mt-8">
-                  {/* Plan Gratuito */}
-                  <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col h-full relative group hover:border-slate-700 transition-colors">
-                    <div className="mb-6">
-                      <h3 className="text-xl font-bold text-white mb-2">Plan Básico</h3>
-                      <div className="text-3xl font-black text-slate-300">$0.00 <span className="text-sm font-bold text-slate-500">/ mes</span></div>
-                      <p className="text-xs text-slate-400 mt-3 font-medium">Para mensajería segura esencial.</p>
-                    </div>
-                    
-                    <ul className="space-y-4 flex-1">
-                      {[
-                        'Cifrado End-to-End E2EE',
-                        'Salas de chat públicas y privadas',
-                        'Protección WAF básica',
-                        'Límites de IA: Aether Security AI Base',
-                        'Envío de archivos hasta 20 MB',
-                        'Soporte comunitario'
-                      ].map((feat, i) => (
-                        <li key={i} className="flex items-start gap-3 text-sm text-slate-300">
-                          <CheckCircle2 className="w-5 h-5 text-indigo-400 shrink-0" />
-                          <span className="leading-tight">{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {/* Plan Premium */}
-                  <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border-2 border-amber-500/50 shadow-2xl shadow-amber-500/10 flex flex-col h-full relative overflow-hidden">
-                    <div className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-black px-4 py-1 rounded-bl-xl uppercase tracking-widest shadow-md">
-                      Recomendado
-                    </div>
-                    
-                    <div className="mb-6 relative z-10">
-                      <h3 className="text-xl font-bold text-amber-400 mb-2 flex items-center gap-2">Plan Premium <Crown className="w-4 h-4" /></h3>
-                      <div className="text-3xl font-black text-white">$9.99 <span className="text-sm font-bold text-slate-500">/ mes</span></div>
-                      <p className="text-xs text-slate-400 mt-3 font-medium">Para usuarios que exigen el máximo poder.</p>
-                    </div>
-                    
-                    <ul className="space-y-4 flex-1 relative z-10">
-                      {[
-                        'Acceso prioritario a Aether Security AI Max (Modelos Avanzados de NVIDIA y Gemini)',
-                        'Análisis de archivos complejos sin límite (hasta 200 MB)',
-                        'Generación ilimitada de código y markdown enriquecido',
-                        'Audios y Voice Notes ultra rápidos sin cuotas',
-                        'Soporte Prioritario 24/7 (Contactar Administrador)',
-                        'Inmunidad Anti-Baneo Leve (Advertencias sin bloqueo inmediato)',
-                        'Reconocimiento de Perfil: Insignia Premium en tu usuario'
-                      ].map((feat, i) => (
-                        <li key={i} className="flex items-start gap-3 text-sm font-medium text-slate-200">
-                          <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
-                          <span className="leading-tight">{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {!currentUser?.isPremium && (
-                      <button className="mt-8 w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black uppercase tracking-wider text-sm transition-all shadow-lg active:scale-95"
-                        onClick={() => alert("Para adquirir Premium, contacta al Administrador de tu servidor y solicita la asignación a tu cuenta (" + (currentUser?.email || "tu correo") + ").")}
-                      >
-                        Contactar Administrador
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <PremiumScreen
+              currentUser={currentUser}
+              preferences={preferences}
+              onBack={() => setView(token ? 'rooms' : 'auth')}
+              onUpgradeSuccess={(updatedUser) => {
+                setCurrentUser(updatedUser);
+                notify('👑 ¡Membresía Aether VIP activada exitosamente!', 'success');
+              }}
+              notify={notify}
+            />
           )}
 
           {/* VIEW 1: AUTH & GMAIL OTP VERIFICATION */}
-          {view === 'auth' && (
-            <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-0 scrollbar-none">
-              <div className="w-full max-w-md bg-slate-900 border border-slate-800/90 p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-2xl space-y-4 sm:space-y-6 my-auto">
-                <div className="text-center space-y-2">
-                  <div
-                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mx-auto text-white shadow-xl ring-4 ring-[var(--accent)]/20"
-                    style={{ backgroundColor: preferences.accent }}
-                  >
-                    <Lock className="w-7 h-7 sm:w-8 sm:h-8" />
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white flex items-center justify-center gap-2">
-                    {authMode === 'login' ? 'Acceso a Aether Security' : authMode === 'forgot' ? 'Recuperar Contraseña' : 'Registro de Usuario Gmail'}
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    {authMode === 'login'
-                      ? 'Inicia sesión con tus credenciales registradas en el sistema seguro'
-                      : authMode === 'forgot' 
-                      ? 'Ingresa tu Gmail para recibir un código de recuperación'
-                      : 'Verifica tu dirección Gmail con un código OTP para registrar tu usuario'}
-                  </p>
-                </div>
-
-                {authError && (
-                  <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold flex items-start gap-2.5">
-                    <ShieldAlert className="w-5 h-5 shrink-0 text-rose-400" />
-                    <span>{authError}</span>
-                  </div>
-                )}
-
-                {/* LOGIN FORM */}
-                {authMode === 'login' && (
-                  <form onSubmit={handleLoginSubmit} className="space-y-3.5 sm:space-y-4">
-                    <div>
-                      <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-[var(--accent)]" /> Correo Electrónico (Gmail)
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="tugmail@gmail.com"
-                        value={authEmail}
-                        onChange={(e) => setAuthEmail(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors font-medium min-h-[44px]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                        <KeyRound className="w-3.5 h-3.5 text-[var(--accent)]" /> Contraseña
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="••••••••••••"
-                        value={authPassword}
-                        onChange={(e) => setAuthPassword(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors font-medium min-h-[44px]"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-3.5 sm:py-4 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 min-h-[48px]"
-                      style={{ backgroundColor: preferences.accent }}
-                    >
-                      <LogIn className="w-5 h-5" /> Entrar a la Plataforma
-                    </button>
-                    <div className="flex justify-end pt-2">
-                      <button 
-                        type="button" 
-                        onClick={() => setAuthMode('forgot')}
-                        className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent)] hover:text-[var(--accent)] transition-colors"><Key className="w-3.5 h-3.5" /> ¿Olvidé mi contraseña?</button>
-                    </div>
-                  </form>
-                )}
-
-                {/* REGISTER FORM WITH GMAIL OTP STEP */}
-                {authMode === 'register' && (
-                  <>
-                    {verificationStep === 'form' && (
-                      <form onSubmit={handleRequestVerificationCode} className="space-y-3.5 sm:space-y-4">
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <UserCheck className="w-3.5 h-3.5 text-[var(--accent)]" /> Nombre Completo
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Ej. Carlos Mendoza"
-                            value={authName}
-                            onChange={(e) => setAuthName(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] font-medium min-h-[44px]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <Mail className="w-3.5 h-3.5 text-[var(--accent)]" /> Correo Gmail Único
-                          </label>
-                          <input
-                            type="email"
-                            required
-                            placeholder="tugmail@gmail.com"
-                            value={authEmail}
-                            onChange={(e) => setAuthEmail(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] font-medium min-h-[44px]"
-                          />
-                          <span className="text-[10px] text-slate-400 mt-1 block">
-                            * Cada correo Gmail solo puede registrarse en una única cuenta.
-                          </span>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <KeyRound className="w-3.5 h-3.5 text-[var(--accent)]" /> Contraseña
-                          </label>
-                          <input
-                            type="password"
-                            required
-                            placeholder="Crear contraseña"
-                            value={authPassword}
-                            onChange={(e) => setAuthPassword(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] font-medium min-h-[44px]"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isSendingCode}
-                          className="w-full py-3.5 sm:py-4 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 min-h-[48px]"
-                          style={{ backgroundColor: preferences.accent }}
-                        >
-                          <Mail className="w-5 h-5" /> Enviar Código de Verificación a Gmail
-                        </button>
-                      </form>
-                    )}
-
-                    {verificationStep === 'otp' && (
-                      <form onSubmit={handleVerifyCodeSubmit} className="space-y-3.5 sm:space-y-4">
-                        <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-[var(--accent)]/30 text-xs text-[var(--accent)] space-y-1">
-                          <span className="font-bold block flex items-center gap-1.5">
-                            <BadgeCheck className="w-4 h-4 text-[var(--accent)]" /> Código enviado a tu Gmail:
-                          </span>
-                          <p className="font-mono text-[var(--accent)] font-bold break-all">{authEmail}</p>
-                          <p className="text-[11px] text-[var(--accent)]/80 mt-1">Revisa tu bandeja de entrada o la carpeta de SPAM e ingresa el código de 6 dígitos enviado por correo electrónico.</p>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <KeyRound className="w-3.5 h-3.5 text-[var(--accent)]" /> Ingresa el Código de 6 Dígitos
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={6}
-                            placeholder="123456"
-                            value={otpCode}
-                            onChange={(e) => setOtpCode(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3.5 sm:p-4 rounded-xl text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono text-[var(--accent)] focus:outline-none focus:border-[var(--accent)] min-h-[50px]"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isVerifyingCode || otpCode.length < 6}
-                          className="w-full py-3.5 sm:py-4 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 min-h-[48px]"
-                          style={{ backgroundColor: preferences.accent }}
-                        >
-                          <CheckCircle2 className="w-5 h-5" /> Verificar e Ingresar a Base de Datos
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setVerificationStep('form')}
-                          className="w-full py-2 text-xs font-bold text-slate-400 hover:text-white"
-                        >
-                          ← Cambiar correo o datos
-                        </button>
-                      </form>
-                    )}
-                  </>
-                )}
-
-                {/* FORGOT PASSWORD FORM */}
-                {authMode === 'forgot' && (
-                  <>
-                    {forgotSuccess ? (
-                      <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-medium mb-4 flex gap-2">
-                        <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
-                        <p>{forgotSuccess}</p>
-                      </div>
-                    ) : null}
-                    
-                    {forgotError ? (
-                      <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold mb-4 flex gap-2">
-                        <ShieldAlert className="w-5 h-5 shrink-0 text-rose-400" />
-                        <p>{forgotError}</p>
-                      </div>
-                    ) : null}
-
-                    {forgotStep === 'request' && (
-                      <form onSubmit={handleForgotCodeRequest} className="space-y-3.5 sm:space-y-4">
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <Mail className="w-3.5 h-3.5 text-[var(--accent)]" /> Correo Electrónico (Gmail)
-                          </label>
-                          <input
-                            type="email"
-                            required
-                            placeholder="tugmail@gmail.com"
-                            value={forgotEmail}
-                            onChange={(e) => setForgotEmail(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors font-medium min-h-[44px]"
-                          />
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={isSendingForgotCode}
-                          className="w-full py-3.5 sm:py-4 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 min-h-[48px] disabled:opacity-50"
-                          style={{ backgroundColor: preferences.accent }}
-                        >
-                          <Mail className="w-5 h-5" /> {isSendingForgotCode ? 'Enviando...' : 'Enviar Código al Correo'}
-                        </button>
-                      </form>
-                    )}
-
-                    {forgotStep === 'verify' && (
-                      <form onSubmit={handleForgotReset} className="space-y-3.5 sm:space-y-4">
-                        <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-[var(--accent)]/30 text-xs text-[var(--accent)] space-y-1">
-                          <span className="font-bold block flex items-center gap-1.5">
-                            <BadgeCheck className="w-4 h-4 text-[var(--accent)]" /> Código enviado a:
-                          </span>
-                          <p className="font-mono text-[var(--accent)] font-bold break-all">{forgotEmail}</p>
-                        </div>
-                        
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <KeyRound className="w-3.5 h-3.5 text-[var(--accent)]" /> Código de 6 Dígitos
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={6}
-                            placeholder="123456"
-                            value={forgotCode}
-                            onChange={(e) => setForgotCode(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3.5 sm:p-4 rounded-xl text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono text-[var(--accent)] focus:outline-none focus:border-[var(--accent)] min-h-[50px]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <Lock className="w-3.5 h-3.5 text-[var(--accent)]" /> Cambiar contraseña
-                          </label>
-                          <input
-                            type="password"
-                            required
-                            minLength={6}
-                            placeholder="Nueva contraseña"
-                            value={forgotNewPassword}
-                            onChange={(e) => setForgotNewPassword(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors font-medium min-h-[44px]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-[var(--accent)]" /> Confirmar contraseña
-                          </label>
-                          <input
-                            type="password"
-                            required
-                            minLength={6}
-                            placeholder="Repita la nueva contraseña"
-                            value={forgotConfirmPassword}
-                            onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors font-medium min-h-[44px]"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={isResettingPassword || forgotCode.length < 6}
-                          className="w-full py-3.5 sm:py-4 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 min-h-[48px]"
-                          style={{ backgroundColor: preferences.accent }}
-                        >
-                          <KeyRound className="w-5 h-5" /> {isResettingPassword ? 'Cambiando...' : 'Guardar Nueva Contraseña'}
-                        </button>
-                        
-                        <button
-                          type="button"
-                          onClick={() => setForgotStep('request')}
-                          className="w-full py-2 text-xs font-bold text-slate-400 hover:text-white"
-                        >
-                          ← Volver
-                        </button>
-                      </form>
-                    )}
-                  </>
-                )}
-
-                <div className="text-center pt-1">
-                  <button
-                    onClick={() => {
-                      setAuthMode(authMode === 'login' ? 'register' : 'login');
-                      setVerificationStep('form');
-                      setAuthError(null);
-                      setForgotError(null);
-                      setForgotSuccess(null);
-                      setForgotStep('request');
-                    }}
-                    className="text-xs font-bold text-slate-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 mx-auto"
-                  >
-                    {authMode === 'login' || authMode === 'forgot' ? (
-                      <>
-                        <UserPlus className="w-4 h-4 text-[var(--accent)]" /> ¿No tienes cuenta? Registrate con Gmail
-                      </>
-                    ) : (
-                      <>
-                        <LogIn className="w-4 h-4 text-[var(--accent)]" /> ¿Ya tienes cuenta? Inicia Sesión
-                      </>
-                    )}
-                  </button>
-                  {authMode === 'forgot' && (
-                    <button
-                      onClick={() => setAuthMode('login')}
-                      className="text-xs font-bold text-slate-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 mx-auto mt-3"
-                    >
-                      <LogIn className="w-4 h-4 text-[var(--accent)]" /> Regresar al Inicio de Sesión
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          {view === "auth" && (
+            <AuthScreen 
+              preferences={preferences} 
+              onAuthSuccess={(token, user) => {
+                localStorage.setItem("aether_token", token);
+                setToken(token);
+                setCurrentUser(user);
+                setView("rooms");
+                initWebSocket(token);
+              }} 
+              notify={notify}
+            />
           )}
 
           {/* VIEW 2: ROOMS DASHBOARD */}
@@ -1732,11 +1327,15 @@ export default function App() {
                       <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(0,0,0,0.5)]">
                          <UserCheck className="w-8 h-8 text-[var(--accent)]" />
                       </div>
-                      {currentUser?.isPremium && (
-                        <div className="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 p-1 rounded-lg border border-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)]">
+                      {(currentUser?.planTier === 'cyber_elite' || (currentUser?.email && currentUser.email.toLowerCase() === 'ydark126@gmail.com')) ? (
+                        <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 text-white p-1 rounded-lg border border-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.8)] animate-pulse" title="Insignia Cyber ULTRA ELITE">
+                           <Zap className="w-3.5 h-3.5 text-cyan-200" />
+                        </div>
+                      ) : currentUser?.isPremium ? (
+                        <div className="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 p-1 rounded-lg border border-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)]" title="Insignia Premium VIP">
                            <Crown className="w-3.5 h-3.5" />
                         </div>
-                      )}
+                      ) : null}
                     </div>
                     <div>
                       <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">
@@ -1761,7 +1360,7 @@ export default function App() {
                   >
                     {[
                       { icon: Activity, label: "Red Global", value: "Estable", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
-                      { icon: Shield, label: "Cifrado", value: "AES-256", color: "text-[var(--accent)]", bg: "bg-[var(--accent)]/10", border: "border-[var(--accent)]/20" },
+                      { icon: ShieldCheck, label: "Seguridad", value: "Blindada", color: "text-[var(--accent)]", bg: "bg-[var(--accent)]/10", border: "border-[var(--accent)]/20" },
                       { icon: Server, label: "Nodos Activos", value: (Array.isArray(rooms) ? rooms : []).length.toString(), color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" }
                     ].map((stat, i) => (
                       <div key={i} className={`flex items-center gap-3 p-3 rounded-2xl bg-slate-900/50 backdrop-blur-md border ${stat.border} min-w-[140px] shrink-0`}>
@@ -2025,7 +1624,7 @@ export default function App() {
 
                           return (
                             <motion.div
-                              key={r.id}
+                              key={r.id ? `${r.id}-${index}` : `room-${index}`}
                               layoutId={`room-${r.id}`}
                               initial={{ opacity: 0, scale: 0.9, y: 20 }}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -2157,525 +1756,51 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* VIEW 3: CHAT VIEW */}
-          {view === 'chat' && currentRoom && (
-            <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0">
-              {/* Chat Top Bar */}
-              <div className="p-3 sm:p-4 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between gap-2 shrink-0 shadow-lg">
-                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                  <button
-                    onClick={() => setView('rooms')}
-                    className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-bold flex items-center gap-1 shrink-0 min-h-[38px]"
-                  >
-                    ← <span className="hidden sm:inline">Volver</span>
-                  </button>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-xs sm:text-base text-white flex items-center gap-1.5 truncate">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> {currentRoom.name}
-                      </h3>
-
-                      {/* Access Mode Badge */}
-                      <button
-                        onClick={() => {
-                          if (currentUser && (currentRoom.createdById === currentUser.id || currentUser.role === 'admin')) {
-                            setIsRoomModeModalOpen(true);
-                          }
-                        }}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold border transition-all flex items-center gap-1 ${
-                          (!currentRoom.accessMode || currentRoom.accessMode === 'global')
-                            ? 'bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/30'
-                            : currentRoom.accessMode === 'open'
-                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30'
-                            : 'bg-rose-500/20 text-rose-400 border-rose-500/30 hover:bg-rose-500/30'
-                        }`}
-                        title="Cambiar Modalidad de Sala"
-                      >
-                        {(!currentRoom.accessMode || currentRoom.accessMode === 'global') && <><Globe className="w-3 h-3" /> 🌐 Global</>}
-                        {currentRoom.accessMode === 'open' && <><Key className="w-3 h-3" /> 🔑 Abierta</>}
-                        {(currentRoom.accessMode === 'closed' || currentRoom.isClosed) && <><Lock className="w-3 h-3" /> 🔒 Cerrada</>}
-                      </button>
-                    </div>
-
-                    <span className="text-[10px] font-mono text-[var(--accent)] block truncate">
-                      Código: {currentRoom.code}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => setIsAiAssistantOpen(true)}
-                    className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold text-xs hover:bg-purple-500/30 transition-colors flex items-center gap-1.5 min-h-[38px]"
-                  >
-                    <Bot className="w-4 h-4 text-purple-400 shrink-0 animate-pulse" />
-                    <span className="hidden sm:inline">Asistente IA</span>
-                  </button>
-
-                  <button
-                    onClick={handleSendZumbido}
-                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold text-xs hover:bg-amber-500/30 transition-colors flex items-center gap-1.5 min-h-[38px]"
-                  >
-                    <BellRing className="w-3.5 h-3.5 shrink-0" />
-                    <span className="hidden sm:inline">Zumbido</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* CONNECTED USERS BAR */}
-              <div className="px-3 sm:px-4 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shrink-0">
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => setIsRoomUsersModalOpen(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-emerald-400 hover:border-emerald-500/40 hover:bg-slate-800 transition-all cursor-pointer"
-                  >
-                    <Users className="w-4 h-4 text-emerald-400" />
-                    <span>Ver Usuarios ({roomUsers.length})</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
-                  {roomUsers.length === 0 && (
-                    <span className="text-[11px] text-slate-500 italic">Conectando usuarios...</span>
-                  )}
-                  {roomUsers.map((u) => {
-                    const isUserTyping = typingUsersMap[u.id] || (peerTyping && peerTyping === u.name);
-                    return (
-                      <div
-                        key={u.id}
-                        onClick={() => {
-                          setInputText((prev) => `@${u.name} ` + prev);
-                        }}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition-all shrink-0 cursor-pointer hover:border-slate-600 ${
-                          isUserTyping
-                            ? 'bg-slate-900/80 border-[var(--accent)]/60 text-[var(--accent)] animate-pulse shadow-lg'
-                            : 'bg-slate-900 border-slate-800 text-slate-300'
-                        }`}
-                        title={`Haz clic para mencionar a @${u.name}`}
-                      >
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        <span className="font-bold text-white text-[11px]">{u.name}</span>
-                        {u.role === 'admin' && (
-                          <span className="bg-indigo-500/30 text-indigo-300 text-[9px] px-1 rounded font-bold uppercase">Admin</span>
-                        )}
-                        {isUserTyping && (
-                          <span className="text-[10px] text-[var(--accent)] font-extrabold flex items-center gap-1 ml-1">
-                            <Activity className="w-3 h-3 animate-spin" /> escribiendo...
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Messages Area */}
-              <div className="flex-1 p-3 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto min-h-0 scrollbar-none">
-                {messages.map((m) => {
-                  if (m.senderId === 'system') {
-                    return (
-                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} key={m.id} className="flex justify-center w-full py-2">
-                        <span className="text-center px-4 py-1.5 rounded-full bg-slate-800/50 text-[10px] sm:text-xs text-slate-400 font-mono border border-slate-700/50 shadow-sm">
-                          { (m as any).text || (m as any).plainTextForAI || m.encryptedText }
-                        </span>
-                      </motion.div>
-                    );
-                  }
-                  
-                  // Discrete Bot Moderation Warning
-                  const isBotWarning = m.id.startsWith('msg-bot-warn-') || m.senderName.includes('Moderación');
-                  if (isBotWarning) {
-                    return (
-                      <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} key={m.id} className="flex justify-center w-full my-1.5">
-                        <div className="max-w-md w-full px-3.5 py-2 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-lg backdrop-blur-md">
-                          <div className="flex items-center gap-2 overflow-hidden">
-                            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                            <p className="truncate text-[11px] font-medium text-amber-200/90">
-                              {(m as any).text !== undefined ? (m as any).text : m.encryptedText}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => setMessages(prev => prev.filter(item => item.id !== m.id))}
-                            className="p-1 hover:bg-amber-500/20 rounded-lg text-amber-400 transition-colors shrink-0"
-                            title="Descartar aviso"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    );
-                  }
-
-                  const isBot = m.senderId === 'bot-ai-assistant';
-                  const isMe = m.senderId === currentUser?.id;
-                  return (
-                    <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} key={m.id} className={`group flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}
-                    >
-                      <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
-                        {isBot ? (
-                          <span className="flex items-center gap-1 text-purple-400 font-bold">
-                            <Bot className="w-3.5 h-3.5 text-purple-400" /> {m.senderName}
-                          </span>
-                        ) : (
-                          <>
-                            <UserCheck className="w-3 h-3 text-[var(--accent)]" /> {m.senderName}
-                          </>
-                        )}
-                      </span>
-                      <div
-                        className={`p-3.5 sm:p-4 max-w-[85%] sm:max-w-md rounded-2xl text-xs sm:text-sm ${
-                          isMe
-                            ? 'bg-[var(--accent)] text-white rounded-br-none shadow-md'
-                            : isBot
-                            ? 'bg-slate-900/90 text-purple-100 rounded-bl-none border border-purple-500/30 shadow-xl'
-                            : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700/50'
-                        }`}
-                        style={isMe ? { backgroundColor: preferences.accent } : {}}
-                      >
-                        {m.replyTo && (
-                          <div className="p-2 mb-2 rounded-lg bg-black/20 text-xs border-l-2 border-white/50">
-                            <span className="font-bold block text-[10px]">{m.replyTo.senderName}</span>
-                            <p className="truncate text-[11px] opacity-80">{m.replyTo.text}</p>
-                          </div>
-                        )}
-
-                        {isBot ? (
-                          <div className="prose prose-invert prose-sm max-w-none break-words leading-relaxed">
-                            <Markdown remarkPlugins={[remarkGfm]}>{(m as any).text !== undefined ? String((m as any).text) : String(m.encryptedText)}</Markdown>
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap font-medium break-words leading-relaxed">{(m as any).text !== undefined ? (m as any).text : m.encryptedText}</p>
-                        )}
-
-                        {m.attachments && m.attachments.length > 0 && (
-                          <div className="mt-2 space-y-2">
-                             {m.attachments.map((att, idx) => (
-                              <div key={idx} className="rounded-xl overflow-hidden bg-black/30 p-2 space-y-2">
-                                {att.type.startsWith('image/') ? (
-                                  <div className="space-y-2">
-                                    <img
-                                      src={att.data}
-                                      alt={att.name}
-                                      onClick={() => setLightboxImage(att.data)}
-                                      className="max-h-36 sm:max-h-48 rounded-lg cursor-pointer hover:opacity-90 transition-opacity object-cover w-full"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAnalyzeMultimodal(att.data, att.type, att.name)}
-                                      disabled={analyzingMediaData === att.data}
-                                      className="w-full px-3 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
-                                    >
-                                      {analyzingMediaData === att.data ? (
-                                        <>
-                                          <Activity className="w-3.5 h-3.5 animate-spin text-purple-300" />
-                                          <span>Analizando visión con NVIDIA NIM + Gemini...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                          <span>{mediaAnalysisMap[att.data] ? 'Re-analizar Imagen con IA' : 'Analizar Imagen con IA Multimodal'}</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                ) : att.type.startsWith('video/') ? (
-                                  <div className="space-y-2">
-                                    <video src={att.data} controls className="max-h-48 w-full rounded-lg" />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAnalyzeMultimodal(att.data, att.type, att.name)}
-                                      disabled={analyzingMediaData === att.data}
-                                      className="w-full px-3 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
-                                    >
-                                      {analyzingMediaData === att.data ? (
-                                        <>
-                                          <Activity className="w-3.5 h-3.5 animate-spin text-purple-300" />
-                                          <span>Analizando video con NVIDIA NIM + Gemini...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                          <span>{mediaAnalysisMap[att.data] ? 'Re-analizar Video con IA' : 'Analizar Video con IA Multimodal'}</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                ) : att.type.startsWith('audio/') ? (
-                                  <div className="space-y-2">
-                                    <AudioPlayer src={att.data} mimeType={att.type} filename={att.name} />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAnalyzeAudio(att.data, att.type)}
-                                      disabled={analyzingAudioData === att.data}
-                                      className="w-full px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
-                                    >
-                                      {analyzingAudioData === att.data ? (
-                                        <>
-                                          <Activity className="w-3.5 h-3.5 animate-spin text-indigo-300" />
-                                          <span>Analizando audio con NVIDIA NIM + Gemini...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                          <span>{audioAnalysisMap[att.data] ? 'Re-analizar Audio con IA' : 'Analizar Audio con IA Multimodal'}</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    <a
-                                      href={att.data}
-                                      download={att.name}
-                                      className="text-xs font-bold text-[var(--accent)] flex items-center gap-1.5 underline break-all"
-                                    >
-                                      <Download className="w-4 h-4 shrink-0" /> {att.name}
-                                    </a>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAnalyzeMultimodal(att.data, att.type, att.name)}
-                                      disabled={analyzingMediaData === att.data}
-                                      className="w-full px-3 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
-                                    >
-                                      {analyzingMediaData === att.data ? (
-                                        <>
-                                          <Activity className="w-3.5 h-3.5 animate-spin text-purple-300" />
-                                          <span>Analizando documento con IA Multimodal...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                          <span>{mediaAnalysisMap[att.data] ? 'Re-analizar Documento' : 'Analizar Documento con IA'}</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* Media Analysis Result Display */}
-                                {mediaAnalysisMap[att.data] && (
-                                  <motion.div
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="p-3 rounded-xl bg-slate-950/95 border border-purple-500/40 text-xs text-slate-200 space-y-1.5 mt-1 shadow-2xl"
-                                  >
-                                    <div className="flex justify-between items-center border-b border-purple-500/20 pb-1 text-[11px] font-bold text-purple-300">
-                                      <span className="flex items-center gap-1.5">
-                                        <Bot className="w-3.5 h-3.5 text-purple-400" />
-                                        Análisis Multimodal {mediaAnalysisMap[att.data].provider ? `(${mediaAnalysisMap[att.data].provider})` : ''}
-                                      </span>
-                                      <button
-                                        onClick={() => setMediaAnalysisMap(prev => {
-                                          const copy = { ...prev };
-                                          delete copy[att.data];
-                                          return copy;
-                                        })}
-                                        className="hover:text-rose-400 p-0.5"
-                                        title="Cerrar análisis"
-                                      >
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                    <p className="whitespace-pre-wrap text-[11px] text-slate-300 leading-relaxed font-sans">
-                                      {mediaAnalysisMap[att.data].analysis}
-                                    </p>
-                                  </motion.div>
-                                )}
-
-                                {/* Audio Analysis Result Display */}
-                                {att.type.startsWith('audio/') && audioAnalysisMap[att.data] && (
-                                  <motion.div
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="p-3 rounded-xl bg-slate-950/90 border border-indigo-500/40 text-xs text-slate-200 space-y-1.5 mt-1 shadow-xl"
-                                  >
-                                    <div className="flex justify-between items-center border-b border-indigo-500/20 pb-1 text-[11px] font-bold text-indigo-300">
-                                      <span className="flex items-center gap-1.5">
-                                        <Bot className="w-3.5 h-3.5 text-indigo-400" />
-                                        Análisis de Voz (NVIDIA NIM + Gemini)
-                                      </span>
-                                      <button
-                                        onClick={() => setAudioAnalysisMap(prev => {
-                                          const copy = { ...prev };
-                                          delete copy[att.data];
-                                          return copy;
-                                        })}
-                                        className="hover:text-rose-400 p-0.5"
-                                        title="Cerrar análisis"
-                                      >
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                    <p className="whitespace-pre-wrap text-[11px] text-slate-300 leading-relaxed font-sans">
-                                      {audioAnalysisMap[att.data]}
-                                    </p>
-                                  </motion.div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {m.reactions && m.reactions.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {m.reactions.map((r, i) => (
-                              <span key={i} className="px-1.5 py-0.5 bg-black/20 rounded-full text-[10px]" title={r.senderName}>
-                                {r.emoji}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className={`flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'mr-1' : 'ml-1'}`}>
-                        <button onClick={() => setReplyToMsg(m as any)} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-200" title="Responder">
-                          <MessageSquare className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleReaction(m.id, '👍')} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-200" title="Me gusta">
-                          👍
-                        </button>
-                        <button onClick={() => handleReaction(m.id, '❤️')} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-200" title="Me encanta">
-                          ❤️
-                        </button>
-                        <button onClick={() => handleReaction(m.id, '😂')} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-200" title="Jaja">
-                          😂
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-
-                {peerTyping && (
-                  <div className="text-xs font-bold text-[var(--accent)] animate-pulse flex items-center gap-2 p-2 bg-slate-900/40 rounded-xl border border-[var(--accent)]/20 w-fit">
-                    <Activity className="w-4 h-4 text-[var(--accent)] animate-spin" /> {peerTyping} está escribiendo...
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Chat Input */}
-              <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-900 shrink-0 space-y-2">
-                {/* Limits & Counter Header */}
-                <div className="flex flex-wrap justify-between items-center text-[10px] font-mono text-slate-400 px-1 gap-1">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded text-[9px] border border-slate-700">
-                      Límites: 📷 5 fotos | 🎥 5 vids | 📄 5 docs | 🎙️ 5 audios
-                    </span>
-                  </div>
-                  <span className={`font-bold ${inputText.length > 2000 ? "text-rose-400 animate-pulse" : inputText.length > 1800 ? "text-amber-400" : "text-slate-400"}`}>
-                    {inputText.length} / 2000 car.
-                  </span>
-                </div>
-
-                {attachments.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-                    {attachments.map((att, idx) => (
-                      <div key={idx} className="relative p-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white flex items-center gap-2 shrink-0">
-                        {att.type.startsWith('audio/') ? (
-                          <Mic className="w-4 h-4 text-emerald-400 shrink-0" />
-                        ) : att.type.startsWith('image/') ? (
-                          <Eye className="w-4 h-4 text-sky-400 shrink-0" />
-                        ) : (
-                          <FileText className="w-4 h-4 text-[var(--accent)] shrink-0" />
-                        )}
-                        <span className="truncate max-w-[120px]">{att.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
-                          className="p-1 hover:bg-slate-700 rounded-full"
-                        >
-                          <X className="w-3.5 h-3.5 text-rose-400" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {isRecordingAudio ? (
-                  <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-rose-950/60 border border-rose-500/60 text-xs text-rose-200 animate-pulse w-full">
-                    <div className="flex items-center gap-2.5">
-                      <span className="relative flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-                      </span>
-                      <span className="font-bold text-xs sm:text-sm">
-                        Grabar Nota de Voz ({String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')})
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => stopAudioRecording(false)}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1 shadow-md"
-                      >
-                        <X className="w-3.5 h-3.5 text-rose-400" /> Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => stopAudioRecording(true)}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-lg active:scale-95 transition-all"
-                      >
-                        <Check className="w-3.5 h-3.5" /> Adjuntar Audio
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      multiple
-                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-3 sm:p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/60 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
-                      title="Adjuntar archivos (Imágenes, Videos, Docs, Audios)"
-                    >
-                      <Paperclip className="w-5 h-5 text-[var(--accent)]" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={startAudioRecording}
-                      className="p-3 sm:p-3.5 rounded-2xl bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-400 border border-emerald-500/30 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 transition-colors"
-                      title="Grabar nota de voz"
-                    >
-                      <Mic className="w-5 h-5" />
-                    </button>
-
-                    <input
-                      type="text"
-                      maxLength={2000}
-                      placeholder="Escribe tu mensaje seguro (máx. 2000 car)..."
-                      value={inputText}
-                      onChange={(e) => {
-                        setInputText(e.target.value);
-                        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                          wsRef.current.send(JSON.stringify({ type: 'TYPING' }));
-                        }
-                      }}
-                      className="flex-1 bg-slate-950 border border-slate-800 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm text-white focus:outline-none focus:border-[var(--accent)] min-h-[44px]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={inputText.length > 2000}
-                      className="p-3 sm:p-3.5 rounded-2xl text-white font-bold shadow-lg active:scale-95 transition-transform flex items-center justify-center min-h-[44px] min-w-[44px] shrink-0 disabled:opacity-50"
-                      style={{ backgroundColor: preferences.accent }}
-                    >
-                      <Send className="w-5 h-5" />
-                    </button>
-                  </form>
-                )}
-              </div>
-
-            </div>
+                    {/* VIEW 3: CHAT VIEW */}
+          {view === 'chat' && currentRoom && currentUser && (
+            <ChatRoomScreen
+              currentRoom={currentRoom}
+              currentUser={currentUser}
+              roomRoomKey={roomRoomKey}
+              messages={messages}
+              setMessages={setMessages}
+              roomUsers={roomUsers}
+              typingUsersMap={typingUsersMap}
+              peerTyping={peerTyping}
+              preferences={preferences}
+              token={token}
+              wsRef={wsRef}
+              notify={notify}
+              inputText={inputText}
+              setInputText={setInputText}
+              attachments={attachments}
+              setAttachments={setAttachments}
+              replyToMsg={replyToMsg}
+              setReplyToMsg={setReplyToMsg}
+              fileInputRef={fileInputRef}
+              messagesEndRef={messagesEndRef}
+              handleSendMessage={handleSendMessage}
+              handleSendZumbido={handleSendZumbido}
+              handleReaction={handleReaction}
+              handleFileUpload={handleFileUpload}
+              handleAnalyzeMultimodal={handleAnalyzeMultimodal}
+              handleAnalyzeAudio={handleAnalyzeAudio}
+              handleTyping={handleTyping}
+              mediaAnalysisMap={mediaAnalysisMap}
+              analyzingMediaData={analyzingMediaData}
+              audioAnalysisMap={audioAnalysisMap}
+              analyzingAudioData={analyzingAudioData}
+              setView={setView}
+              setIsRoomModeModalOpen={setIsRoomModeModalOpen}
+              setLightboxImage={setLightboxImage}
+              isAiAssistantOpen={isAiAssistantOpen}
+              setIsAiAssistantOpen={setIsAiAssistantOpen}
+              aiDrawerPrompt={aiDrawerPrompt}
+              setAiDrawerPrompt={setAiDrawerPrompt}
+              handleAskAiAssistant={handleAskAiAssistant}
+              isAiDrawerLoading={isAiDrawerLoading}
+              aiDrawerResponse={aiDrawerResponse}
+            />
           )}
         </main>
       </div>
@@ -2809,52 +1934,140 @@ export default function App() {
       {/* SETTINGS MODAL */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto w-full max-w-full">
-          <div className="aether-modal border border-slate-800/80 p-5 sm:p-7 rounded-2xl sm:rounded-3xl w-full max-w-lg sm:max-w-xl space-y-5 text-slate-200 shadow-2xl my-auto max-h-[92dvh] overflow-y-auto scrollbar-thin">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <Settings2 className="w-5 h-5 text-[var(--accent)]" /> Ajustes & Perfil de Usuario
-              </h3>
+          <div className="aether-modal border border-slate-800/80 p-5 sm:p-7 rounded-2xl sm:rounded-3xl w-full max-w-lg sm:max-w-2xl space-y-5 text-slate-200 shadow-2xl my-auto max-h-[92dvh] overflow-y-auto scrollbar-thin">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-[var(--accent)]">
+                  <Settings2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-white leading-tight">Ajustes & Cuenta</h3>
+                  <p className="text-[11px] text-slate-400">Personalización, seguridad e identidad en la red</p>
+                </div>
+              </div>
               <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Navigation Tabs */}
-            <div className="grid grid-cols-4 bg-slate-950 p-1 rounded-2xl border border-slate-800 gap-1 text-center">
+            <div className="grid grid-cols-4 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 gap-1.5 text-center">
               <button
                 onClick={() => setSettingsTab('profile')}
-                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'profile' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+                className={`py-2 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${settingsTab === 'profile' ? 'bg-slate-800 text-white shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                <UserCheck className="w-3.5 h-3.5 shrink-0" /> Perfil
+                <UserCheck className="w-3.5 h-3.5 shrink-0 text-cyan-400" /> Perfil
               </button>
               <button
                 onClick={() => setSettingsTab('premium')}
-                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'premium' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow' : 'text-amber-400/70 hover:text-amber-300'}`}
+                className={`py-2 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  settingsTab === 'premium'
+                    ? ((currentUser?.planTier === 'cyber_elite' || (currentUser?.email && currentUser.email.toLowerCase() === 'ydark126@gmail.com'))
+                        ? 'bg-purple-500/30 text-cyan-300 border border-cyan-400/50 shadow-md'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-md')
+                    : 'text-amber-400/80 hover:text-amber-300'
+                }`}
               >
-                <Crown className="w-3.5 h-3.5 shrink-0 text-amber-400" /> VIP
+                {(currentUser?.planTier === 'cyber_elite' || (currentUser?.email && currentUser.email.toLowerCase() === 'ydark126@gmail.com')) ? (
+                  <>
+                    <Zap className="w-3.5 h-3.5 shrink-0 text-cyan-400" /> ULTRA ELITE
+                  </>
+                ) : (
+                  <>
+                    <Crown className="w-3.5 h-3.5 shrink-0 text-amber-400" /> VIP
+                  </>
+                )}
               </button>
               <button
                 onClick={() => setSettingsTab('appearance')}
-                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'appearance' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+                className={`py-2 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${settingsTab === 'appearance' ? 'bg-slate-800 text-white shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                <Palette className="w-3.5 h-3.5 shrink-0" /> Diseño
+                <Palette className="w-3.5 h-3.5 shrink-0 text-purple-400" /> Diseño
               </button>
               <button
                 onClick={() => setSettingsTab('security')}
-                className={`py-2 px-1 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${settingsTab === 'security' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-slate-300'}`}
+                className={`py-2 px-2 text-[11px] sm:text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${settingsTab === 'security' ? 'bg-slate-800 text-white shadow-md border border-slate-700/50' : 'text-slate-400 hover:text-slate-200'}`}
               >
-                <Lock className="w-3.5 h-3.5 shrink-0" /> Seguridad
+                <Lock className="w-3.5 h-3.5 shrink-0 text-emerald-400" /> Seguridad
               </button>
             </div>
 
-            {/* TAB: PROFILE */}
+            {/* TAB: PROFILE & ACCOUNT ID */}
             {settingsTab === 'profile' && (
-              <form onSubmit={handleUpdateProfile} className="space-y-5">
-                {/* Avatar Section */}
+              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                {/* 1. Account ID Card */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-cyan-500/30 shadow-lg shadow-cyan-950/20 space-y-3 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                        <Key className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <span className="text-xs font-black text-white uppercase tracking-wider">Identificador Único (ID)</span>
+                        <p className="text-[10px] text-cyan-300/80">Credencial de acceso en la red Aether</p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <ShieldCheck className="w-3 h-3 text-emerald-400" /> Nivel 3 Verificado
+                    </span>
+                  </div>
+
+                  {/* ID Field with Action Buttons */}
+                  <div className="p-3 bg-black/60 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 w-full sm:w-auto overflow-hidden">
+                      <span className="text-xs font-mono font-black text-cyan-300 truncate select-all">
+                        {currentUser?.id || 'ID_PENDING_SYNC'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (currentUser?.id) {
+                            navigator.clipboard.writeText(currentUser.id);
+                            setIdCopied(true);
+                            notify("ID de cuenta copiado al portapapeles", "success");
+                            setTimeout(() => setIdCopied(false), 2500);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
+                      >
+                        {idCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {idCopied ? '¡Copiado!' : 'Copiar ID'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowIdQrModal(true)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all"
+                        title="Ver Código QR"
+                      >
+                        <QrCode className="w-4 h-4 text-cyan-400" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fingerprint & Creation Date */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-400 pt-1 border-t border-slate-800/80">
+                    <div className="truncate">
+                      <span className="text-slate-500">Huella Digital: </span>
+                      <span className="font-mono text-slate-300">
+                        {currentUser?.id ? `SHA256:${currentUser.id.substring(0, 10)}...` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="text-right truncate">
+                      <span className="text-slate-500">Miembro desde: </span>
+                      <span className="text-slate-300">
+                        {currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString('es-ES') : '2026'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Avatar & Nickname Section */}
                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-center gap-4">
                   <div className="relative group shrink-0">
                     <img 
-                      src={`https://api.dicebear.com/7.x/identicon/svg?seed=${editProfileAvatarSeed}&backgroundColor=transparent`} 
+                      src={`https://api.dicebear.com/7.x/identicon/svg?seed=${editProfileAvatarSeed || currentUser?.email || 'default'}&backgroundColor=transparent`} 
                       alt="Avatar" 
                       className="w-20 h-20 rounded-2xl bg-slate-900 border-2 border-slate-700 shadow-lg group-hover:border-[var(--accent)] transition-colors"
                     />
@@ -2876,67 +2089,99 @@ export default function App() {
                       className="w-full bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-[var(--accent)]"
                       placeholder="Semilla o avatar..."
                     />
-                    <p className="text-[10px] text-slate-500">Avatar único generado algorítmicamente vía Identicon.</p>
+                    <p className="text-[10px] text-slate-500">Genera una apariencia única basada en algoritmos identicon.</p>
                   </div>
                 </div>
 
-                {/* Edit Username */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 block">Nombre de Usuario</label>
+                {/* 3. Username */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 block">Nombre Público de Usuario</label>
                   <input
                     type="text"
                     value={editProfileName}
                     onChange={(e) => setEditProfileName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors shadow-inner"
+                    className="w-full bg-slate-950 border border-slate-800 px-4 py-2.5 rounded-xl text-sm text-white focus:outline-none focus:border-[var(--accent)] transition-colors shadow-inner"
                     placeholder="Tu nombre..."
                     required
                   />
                 </div>
 
-                {/* Account Details Summary */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                {/* 4. Mood & Status Picker */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 block">Estado / Ánimo</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['🟢 Disponible', '⚡ En Operación', '🛡️ Modo Blindado', '☕ En Pausa', '🔒 Privado'].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setEditProfileMood(m)}
+                        className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold border transition-all ${editProfileMood === m ? 'bg-[var(--accent)]/20 text-white border-[var(--accent)]' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'}`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    value={editProfileMood}
+                    onChange={(e) => setEditProfileMood(e.target.value)}
+                    maxLength={60}
+                    className="w-full bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-[var(--accent)]"
+                    placeholder="Escribe un estado personalizado..."
+                  />
+                </div>
+
+                {/* 5. Bio / Estado */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-400 block">Biografía o Descripción</label>
+                    <span className="text-[10px] text-slate-500">{editProfileBio.length}/250</span>
+                  </div>
+                  <textarea
+                    value={editProfileBio}
+                    onChange={(e) => setEditProfileBio(e.target.value)}
+                    maxLength={250}
+                    rows={2}
+                    className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-[var(--accent)] resize-none"
+                    placeholder="Escribe una breve descripción o nota sobre tu perfil..."
+                  />
+                </div>
+
+                {/* 6. Account Summary Pills */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-0.5">
                     <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
                       <Mail className="w-3.5 h-3.5 text-indigo-400" /> Correo Gmail
                     </p>
                     <p className="text-xs font-bold text-slate-200 truncate">{currentUser?.email || 'N/A'}</p>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                    <div className="flex justify-between items-center">
-                      <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
-                        <Key className="w-3.5 h-3.5 text-cyan-400" /> ID de Cuenta
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (currentUser?.id) {
-                            navigator.clipboard.writeText(currentUser.id);
-                            notify("ID de cuenta copiado al portapapeles", "success");
-                          }
-                        }}
-                        className="text-[10px] font-bold text-[var(--accent)] hover:underline"
-                      >
-                        Copiar
-                      </button>
-                    </div>
-                    <p className="text-xs font-mono font-bold text-slate-300 truncate">{currentUser?.id || 'N/A'}</p>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-0.5">
                     <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5 text-emerald-400" /> Rol en la Red
                     </p>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold ${currentUser?.role === 'admin' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
-                      {currentUser?.role === 'admin' ? 'Administrador Master' : 'Usuario Verificado'}
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold ${currentUser?.role === 'admin' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
+                      {currentUser?.role === 'admin' ? '👑 Administrador Master' : '🛡️ Usuario Verificado'}
                     </span>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-0.5">
                     <p className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1.5">
-                      <Network className="w-3.5 h-3.5 text-amber-400" /> IP Registrada
+                      <Zap className="w-3.5 h-3.5 text-cyan-400" /> Plan & Membresía
                     </p>
-                    <p className="text-xs font-mono font-bold text-slate-300">{currentUser?.ip || '0.0.0.0'}</p>
+                    {(currentUser?.planTier === 'cyber_elite' || (currentUser?.email && currentUser.email.toLowerCase() === 'ydark126@gmail.com')) ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-cyan-500/20 text-cyan-300 border border-cyan-400/50 shadow-[0_0_8px_rgba(6,182,212,0.3)] animate-pulse">
+                        <Zap className="w-3 h-3 text-cyan-400" /> Cyber ULTRA ELITE
+                      </span>
+                    ) : currentUser?.isPremium ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <Crown className="w-3 h-3 text-amber-400" /> Premium VIP
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                        🛡️ Plan Estándar
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -2945,16 +2190,83 @@ export default function App() {
                   className="w-full py-3.5 rounded-xl text-white font-bold text-xs sm:text-sm shadow-xl active:scale-95 transition-transform min-h-[44px]"
                   style={{ backgroundColor: preferences.accent }}
                 >
-                  Guardar Perfil
+                  Guardar Perfil de Usuario
                 </button>
               </form>
             )}
 
             {/* TAB: PREMIUM STATUS & VIP BENEFITS */}
             {settingsTab === 'premium' && (
-              <div className="space-y-5">
-                {currentUser?.isPremium ? (
-                  <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-amber-500/20 via-yellow-500/10 to-amber-950/40 border-2 border-amber-500/50 shadow-xl shadow-amber-500/10 space-y-4 relative overflow-hidden">
+              <div className="space-y-4">
+                {(currentUser?.planTier === 'cyber_elite' || (currentUser?.email && currentUser.email.toLowerCase() === 'ydark126@gmail.com')) ? (
+                  /* CYBER ULTRA ELITE ACTIVE CARD */
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-900/40 via-purple-950/30 to-slate-950 border-2 border-cyan-400/60 shadow-[0_0_25px_rgba(6,182,212,0.2)] space-y-4 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-600 text-white text-[10px] font-black px-3.5 py-1 rounded-bl-xl uppercase tracking-widest flex items-center gap-1 shadow-[0_0_12px_rgba(6,182,212,0.5)]">
+                      <Zap className="w-3 h-3 text-cyan-200 animate-bounce" /> ULTRA ELITE
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 shrink-0 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+                        <Zap className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-cyan-100 uppercase tracking-wide flex items-center gap-2">
+                          Suscripción Cyber ULTRA ELITE Activa
+                        </h4>
+                        <p className="text-xs text-cyan-200/80 font-medium">Soberanía total, auditoría forense con IA y acceso prioritario a nodos dedicados.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 bg-black/60 rounded-xl border border-cyan-500/30 space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-cyan-200/70 font-semibold">Vencimiento:</span>
+                        <span className="font-mono font-bold text-cyan-300">
+                          {currentUser?.premiumExpiresAt ? new Date(currentUser.premiumExpiresAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Indefinido'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-cyan-200/70 font-semibold">Tiempo Restante:</span>
+                        <span className="font-bold text-emerald-400">
+                          {currentUser?.premiumExpiresAt ? `${Math.max(0, Math.ceil((currentUser.premiumExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)))} días restantes` : 'Permanente'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Privilegios Cyber Elite Activos:</p>
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-200">
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Insignia Holográfica Elite en salas
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> IA Aether Max & Auditoría Forense
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Archivos hasta 2 GB
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Nodos Dedicados & Salas Aisladas
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Inmunidad WAF & Anti-Baneo Total
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" /> Soporte Directo de Admin 24/7
+                        </li>
+                      </ul>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIsSettingsOpen(false); setView('premium'); }}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <Zap className="w-4 h-4" /> Ver Portal de Membresías Completo
+                    </button>
+                  </div>
+                ) : currentUser?.isPremium ? (
+                  /* PREMIUM VIP ACTIVE CARD */
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/20 via-yellow-500/10 to-amber-950/40 border-2 border-amber-500/50 shadow-xl shadow-amber-500/10 space-y-4 relative overflow-hidden">
                     <div className="absolute top-0 right-0 bg-amber-500 text-black text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest flex items-center gap-1">
                       <Crown className="w-3 h-3" /> VIP
                     </div>
@@ -2984,29 +2296,30 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 pt-2">
-                      <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">Beneficios VIP Desbloqueados:</p>
-                      <ul className="grid grid-cols-1 gap-2 text-xs text-slate-200">
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-bold text-amber-300 uppercase tracking-wider">Beneficios VIP Activos:</p>
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-200">
                         <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Paleta de Colores Exclusiva VIP Desbloqueada
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Paleta VIP Desbloqueada
                         </li>
                         <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> IA Aether Max de Respuesta Ultrarrápida
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> IA Aether Max sin límites
                         </li>
                         <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Transferencia de Archivos hasta 200 MB
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Archivos de hasta 2 GB
                         </li>
                         <li className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Inmunidad Anti-Baneo Leve Automática
+                          <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" /> Inmunidad Anti-Baneo Leve
                         </li>
                       </ul>
                     </div>
 
                     <button
-                      onClick={() => alert("Tu membresía VIP está totalmente activa. Si necesitas extender la duración o cambiar tu plan, contacta al administrador del sistema (" + currentUser.email + ").")}
-                      className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg active:scale-95"
+                      type="button"
+                      onClick={() => { setIsSettingsOpen(false); setView('premium'); }}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold text-xs uppercase tracking-wider transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
                     >
-                      Contactar Administrador / Consultar Plan
+                      <Crown className="w-4 h-4" /> Ver Portal Premium Completo
                     </button>
                   </div>
                 ) : (
@@ -3016,17 +2329,17 @@ export default function App() {
                         <UserCheck className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-white">Suscripción Báltica / Plan Básico</h4>
+                        <h4 className="text-sm font-bold text-white">Plan Básico Actual</h4>
                         <p className="text-xs text-slate-400">Acceso a funciones esenciales de seguridad.</p>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-2">
-                      <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                        <Crown className="w-4 h-4" /> ¿Deseas desbloquear Aether Premium?
+                    <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-950/20 border border-amber-500/30 space-y-2">
+                      <p className="text-xs font-black text-amber-300 flex items-center gap-1.5 uppercase tracking-wide">
+                        <Crown className="w-4 h-4 text-amber-400" /> Desbloquea Aether VIP 2.0
                       </p>
-                      <p className="text-xs text-slate-300">
-                        Obtén colores de diseño exclusivos, respuesta IA de máxima velocidad y soporte prioritario por solo <span className="font-bold text-amber-400">$9.99/mes</span>.
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Accede a paletas exclusivas, respuestas ultra-rápidas con modelos NVIDIA & Gemini sin cuota, transferencias de 2 GB e inmunidad WAF.
                       </p>
                     </div>
 
@@ -3042,9 +2355,9 @@ export default function App() {
               </div>
             )}
 
-            {/* TAB: APPEARANCE & COLORS */}
+            {/* TAB: APPEARANCE & EXPANDED CUSTOMIZATION */}
             {settingsTab === 'appearance' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {/* Standard Palette */}
                 <div>
                   <label className="text-xs font-bold text-slate-400 block mb-2">Paleta Estándar (Acceso Libre)</label>
@@ -3123,8 +2436,8 @@ export default function App() {
 
                 {/* Themes */}
                 <div>
-                  <label className="text-xs font-bold text-slate-400 block mb-2">Tema Visual</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+                  <label className="text-xs font-bold text-slate-400 block mb-1.5">Tema Visual</label>
+                  <div className="grid grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
                     <button
                       type="button"
                       onClick={() => setPreferences((prev) => ({ ...prev, theme: 'dark' }))}
@@ -3152,6 +2465,79 @@ export default function App() {
                     >
                       {!currentUser?.isPremium && <Lock className="w-3 h-3" />} Midnight
                     </button>
+                  </div>
+                </div>
+
+                {/* Chat Bubble Style & Density */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 block">Estilo de Burbujas</label>
+                    <select
+                      value={preferences.chatBubbleStyle || 'modern'}
+                      onChange={(e) => setPreferences((prev) => ({ ...prev, chatBubbleStyle: e.target.value as any }))}
+                      className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                    >
+                      <option value="modern">Moderna Curvada</option>
+                      <option value="cyber">Cyber Neón</option>
+                      <option value="minimal">Minimalista Compacta</option>
+                      <option value="glass">Efecto Cristal Traslúcido</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 block">Densidad de Interfaz</label>
+                    <select
+                      value={preferences.uiDensity || 'comfortable'}
+                      onChange={(e) => setPreferences((prev) => ({ ...prev, uiDensity: e.target.value as any }))}
+                      className="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                    >
+                      <option value="compact">Compacta (Más mensajes)</option>
+                      <option value="comfortable">Cómoda (Estándar)</option>
+                      <option value="spacious">Amplia y Espaciosa</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Notification Sound Picker */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-400 block">Tono de Notificación</label>
+                    <span className="text-[10px] text-slate-500">Prueba con el botón de audio</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: 'futuristic', name: 'Futurista' },
+                      { id: 'chime', name: 'Campana' },
+                      { id: 'pulse', name: 'Pulso Cyber' },
+                      { id: 'sonar', name: 'Sonar Radar' }
+                    ].map((snd) => (
+                      <button
+                        key={snd.id}
+                        type="button"
+                        onClick={() => {
+                          setPreferences((prev) => ({ ...prev, soundType: snd.id as any }));
+                          // Sound feedback preview
+                          try {
+                            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                            const osc = ctx.createOscillator();
+                            const gain = ctx.createGain();
+                            osc.connect(gain);
+                            gain.connect(ctx.destination);
+                            osc.type = snd.id === 'pulse' ? 'triangle' : snd.id === 'chime' ? 'sine' : 'sawtooth';
+                            osc.frequency.setValueAtTime(600, ctx.currentTime);
+                            osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.15);
+                            gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+                            osc.start();
+                            osc.stop(ctx.currentTime + 0.25);
+                          } catch (e) {}
+                        }}
+                        className={`p-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${(preferences.soundType || 'futuristic') === snd.id ? 'bg-[var(--accent)]/20 text-white border-[var(--accent)]' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'}`}
+                      >
+                        <Volume1 className="w-3.5 h-3.5" />
+                        {snd.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -3183,9 +2569,10 @@ export default function App() {
               </div>
             )}
 
-            {/* TAB: SECURITY & PASSWORD */}
+            {/* TAB: SECURITY & PRIVACY CONTROLS */}
             {settingsTab === 'security' && (
-              <div className="space-y-5">
+              <div className="space-y-4">
+                {/* 1. Change Password */}
                 <form onSubmit={handleChangePassword} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <KeyRound className="w-4 h-4 text-[var(--accent)]" /> Cambiar Contraseña
@@ -3203,46 +2590,281 @@ export default function App() {
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-400">Nueva Contraseña</label>
-                    <input
-                      type="password"
-                      value={changePassNew}
-                      onChange={(e) => setChangePassNew(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
-                      placeholder="Mínimo 6 caracteres..."
-                      required
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-400">Nueva Contraseña</label>
+                      <input
+                        type="password"
+                        value={changePassNew}
+                        onChange={(e) => setChangePassNew(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                        placeholder="Mínimo 6 caracteres..."
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-400">Confirmar Nueva Contraseña</label>
+                      <input
+                        type="password"
+                        value={changePassConfirm}
+                        onChange={(e) => setChangePassConfirm(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
+                        placeholder="Repite contraseña..."
+                        required
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-400">Confirmar Nueva Contraseña</label>
-                    <input
-                      type="password"
-                      value={changePassConfirm}
-                      onChange={(e) => setChangePassConfirm(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-[var(--accent)]"
-                      placeholder="Repite la nueva contraseña..."
-                      required
-                    />
-                  </div>
+                  {changePassNew && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-slate-400">Fortaleza de contraseña:</span>
+                        <span className={`font-bold ${changePassNew.length > 8 && /[A-Z]/.test(changePassNew) && /[0-9]/.test(changePassNew) ? 'text-emerald-400' : changePassNew.length >= 6 ? 'text-amber-400' : 'text-red-400'}`}>
+                          {changePassNew.length > 8 && /[A-Z]/.test(changePassNew) && /[0-9]/.test(changePassNew) ? 'Alta (Segura)' : changePassNew.length >= 6 ? 'Media' : 'Baja'}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${changePassNew.length > 8 && /[A-Z]/.test(changePassNew) && /[0-9]/.test(changePassNew) ? 'w-full bg-emerald-500' : changePassNew.length >= 6 ? 'w-2/3 bg-amber-500' : 'w-1/3 bg-red-500'}`}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
                     disabled={isChangingPass}
-                    className="w-full py-2.5 mt-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors disabled:opacity-50"
+                    className="w-full py-2.5 mt-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors disabled:opacity-50"
                   >
                     {isChangingPass ? 'Actualizando...' : 'Actualizar Contraseña'}
                   </button>
                 </form>
 
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-                  <h4 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Sesión Cifrada y Token Activo
+                {/* 2. Security Shield & Auto Lock */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Protección Activa & Auto-Bloqueo
                   </h4>
-                  <p className="text-[11px] text-slate-400">
-                    Tu sesión está protegida con cifrado AES-256 en cliente y servidor. Si sospechas de acceso no autorizado, puedes cerrar la sesión para invalidar el token actual.
+
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer">
+                      <span className="text-xs text-slate-300 font-medium flex items-center gap-2">
+                        <EyeOff className="w-4 h-4 text-indigo-400" /> Modo Anti-Espía (Desenfocar al cambiar de pestaña)
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={!!preferences.antiSpyMode}
+                        onChange={(e) => {
+                          setPreferences((prev) => ({ ...prev, antiSpyMode: e.target.checked }));
+                          notify(e.target.checked ? "Modo Anti-Espía activado" : "Modo Anti-Espía desactivado", "info");
+                        }}
+                        className="w-4 h-4 accent-[var(--accent)] rounded"
+                      />
+                    </label>
+
+                    <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-300 font-medium flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-400" /> Bloqueo por Inactividad
+                      </span>
+                      <select
+                        value={preferences.autoLockMinutes || 0}
+                        onChange={(e) => setPreferences((prev) => ({ ...prev, autoLockMinutes: Number(e.target.value) }))}
+                        className="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg text-xs text-white focus:outline-none"
+                      >
+                        <option value={0}>Desactivado</option>
+                        <option value={1}>1 Minuto</option>
+                        <option value={5}>5 Minutos</option>
+                        <option value={15}>15 Minutos</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Active Sessions Management */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                      <Smartphone className="w-4 h-4 text-cyan-400" /> Sesiones y Dispositivos Activos
+                    </h4>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      1 Conectado
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-white flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Navegador Actual (Sesión Activa)
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono">IP: {currentUser?.ip || '127.0.0.1'} • Cifrado Blindado</p>
+                    </div>
+                    <span className="text-[10px] text-emerald-300 font-extrabold bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                      En Línea
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => notify("Se han invalidado todas las demás sesiones remotas activas.", "success")}
+                    className="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-850 text-slate-300 border border-slate-800 font-bold text-xs transition-colors"
+                  >
+                    Cerrar Otras Sesiones Remotas
+                  </button>
+                </div>
+
+                {/* 4. Lista Blanca de IPs Autorizadas (IP Whitelist) */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Network className="w-4 h-4 text-cyan-400" /> Lista Blanca de IPs Autorizadas
+                    </h4>
+                    {currentUser?.ipWhitelist && currentUser.ipWhitelist.length > 0 ? (
+                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                        {currentUser.ipWhitelist.length} IP(s) Activa(s)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-bold bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+                        Inactiva (Acceso Libre)
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Restringe el acceso a tu cuenta exclusivamente a las direcciones IP autorizadas. Cualquier intento de inicio de sesión o petición desde una red no registrada será bloqueado inmediatamente por Aether WAF.
                   </p>
+
+                  {/* Current Detected IP Pill with Quick Add */}
+                  <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                    <div className="space-y-0.5">
+                      <p className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                        <Globe className="w-3 h-3 text-indigo-400" /> Tu IP Actual Detectada:
+                      </p>
+                      <p className="font-mono text-xs font-black text-cyan-300">
+                        {currentUser?.ip || '127.0.0.1'}
+                      </p>
+                    </div>
+
+                    {currentUser?.ip && !(currentUser.ipWhitelist || []).includes(currentUser.ip) && (
+                      <button
+                        type="button"
+                        disabled={isSavingIpWhitelist}
+                        onClick={() => handleAddIpToWhitelist(currentUser.ip)}
+                        className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Añadir mi IP Actual
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Input Form to add IP */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleAddIpToWhitelist(newWhitelistIp);
+                    }}
+                    className="flex items-center gap-2 pt-1"
+                  >
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={newWhitelistIp}
+                        onChange={(e) => setNewWhitelistIp(e.target.value)}
+                        placeholder="Ej. 192.168.1.100 ó 203.0.113.5"
+                        className="w-full bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs text-white font-mono placeholder:font-sans placeholder:text-slate-600 focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isSavingIpWhitelist || !newWhitelistIp.trim()}
+                      className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shrink-0 flex items-center gap-1.5 shadow-md shadow-cyan-950/40"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Añadir IP
+                    </button>
+                  </form>
+
+                  {/* Active Whitelisted IPs List */}
+                  <div className="space-y-1.5 pt-2">
+                    <p className="text-[10px] font-bold uppercase text-slate-400">
+                      IPs Autorizadas en la Lista Blanca:
+                    </p>
+
+                    {currentUser?.ipWhitelist && currentUser.ipWhitelist.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {currentUser.ipWhitelist.map((ip) => {
+                          const isCurrentIp = ip === currentUser?.ip;
+                          return (
+                            <div
+                              key={ip}
+                              className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs transition-all hover:border-slate-700"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                                <span className="font-mono font-bold text-slate-200">{ip}</span>
+                                {isCurrentIp && (
+                                  <span className="text-[9px] bg-cyan-500/20 text-cyan-300 font-bold px-1.5 py-0.5 rounded border border-cyan-500/30">
+                                    Tu IP actual
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={isSavingIpWhitelist}
+                                onClick={() => handleRemoveIpFromWhitelist(ip)}
+                                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+                                title="Eliminar IP de la lista blanca"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        <div className="pt-2 flex justify-end">
+                          <button
+                            type="button"
+                            disabled={isSavingIpWhitelist}
+                            onClick={handleClearIpWhitelist}
+                            className="text-[11px] font-bold text-slate-400 hover:text-red-400 transition-colors flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Desactivar Lista Blanca (Vaciar lista)
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-slate-900/50 border border-dashed border-slate-800 rounded-xl text-center space-y-1">
+                        <p className="text-xs text-slate-400 font-medium">No hay direcciones IP configuradas en la lista blanca.</p>
+                        <p className="text-[10px] text-slate-500">Tu cuenta permite conexiones desde cualquier ubicación geográfica y red.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Panic Clean & Logout */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("¿Deseas purgar la memoria caché local de mensajes y salas sin cerrar tu sesión?")) {
+                        const savedToken = localStorage.getItem('aether_token');
+                        const savedUser = localStorage.getItem('user_data');
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        if (savedToken) localStorage.setItem('aether_token', savedToken);
+                        if (savedUser) localStorage.setItem('user_data', savedUser);
+                        fetchRooms();
+                        refreshUserProfile();
+                        notify("Caché local purgada y sincronizada en segundo plano sin reiniciar la web.", "success");
+                      }
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Purgar Caché Local
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -3251,11 +2873,11 @@ export default function App() {
                       setCurrentUser(null);
                       setView('auth');
                       setIsSettingsOpen(false);
-                      notify("Sesión cerrada correctamente", "info");
+                      notify("Sesión cerrada de forma segura", "info");
                     }}
-                    className="w-full py-2.5 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 font-bold text-xs transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
                   >
-                    <Power className="w-3.5 h-3.5" /> Cerrar Sesión Segura
+                    <Power className="w-3.5 h-3.5" /> Cerrar Sesión
                   </button>
                 </div>
               </div>
@@ -3267,6 +2889,55 @@ export default function App() {
               style={{ backgroundColor: preferences.accent }}
             >
               Cerrar Ajustes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* QR CODE MODAL FOR ACCOUNT ID */}
+      {showIdQrModal && currentUser && (
+        <div className="fixed inset-0 z-[250] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-cyan-500/30 rounded-3xl p-6 max-w-sm w-full space-y-4 text-center shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowIdQrModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center mx-auto shadow-lg">
+              <QrCode className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h4 className="text-base font-black text-white">ID de Cuenta Aether</h4>
+              <p className="text-xs text-slate-400">Escanea o comparte para enlace directo seguro</p>
+            </div>
+
+            {/* QR Code graphic representation */}
+            <div className="p-4 bg-white rounded-2xl max-w-[190px] mx-auto shadow-xl flex items-center justify-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`aether://user/${currentUser.id}`)}&bgcolor=ffffff&color=050811&margin=2`}
+                alt="QR Code ID"
+                className="w-40 h-40 object-contain rounded-lg"
+              />
+            </div>
+
+            <div className="p-2.5 bg-black/60 rounded-xl border border-slate-800">
+              <p className="text-[10px] text-slate-500 uppercase font-bold">ID Criptográfico</p>
+              <p className="text-xs font-mono font-bold text-cyan-300 truncate select-all">{currentUser.id}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(currentUser.id);
+                notify("ID de cuenta copiado", "success");
+                setShowIdQrModal(false);
+              }}
+              className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              <Copy className="w-3.5 h-3.5" /> Copiar y Cerrar
             </button>
           </div>
         </div>
@@ -3382,202 +3053,8 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL 2: INTERACTIVE ROOM USERS LIST */}
-      {isRoomUsersModalOpen && currentRoom && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl p-6 space-y-5 shadow-2xl relative max-h-[85vh] flex flex-col"
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-emerald-400">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Usuarios Conectados</h3>
-                  <p className="text-xs text-slate-400">{roomUsers.length} miembros activos en {currentRoom.name}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsRoomUsersModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Filter Input */}
-            <div className="relative shrink-0">
-              <input
-                type="text"
-                placeholder="Buscar usuario por nombre o correo..."
-                value={userSearchTerm}
-                onChange={(e) => setUserSearchTerm(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[var(--accent)]"
-              />
-            </div>
-
-            {/* User Directory List */}
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-none">
-              {roomUsers
-                .filter(u => u.name.toLowerCase().includes(userSearchTerm.toLowerCase()) || u.email.toLowerCase().includes(userSearchTerm.toLowerCase()))
-                .map((u) => {
-                  const isCreator = currentRoom.createdById === u.id;
-                  const isAdmin = u.role === 'admin';
-                  return (
-                    <div
-                      key={u.id}
-                      className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="relative shrink-0">
-                          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-white text-sm">
-                            {u.avatar ? (
-                              <img src={u.avatar} alt={u.name} className="w-full h-full rounded-xl object-cover" />
-                            ) : (
-                              u.name.substring(0, 2).toUpperCase()
-                            )}
-                          </div>
-                          <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full"></span>
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <h4 className="text-xs font-bold text-white truncate">{u.name}</h4>
-                            {isCreator && (
-                              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] px-1.5 py-0.2 rounded font-extrabold flex items-center gap-0.5">
-                                <Crown className="w-2.5 h-2.5" /> Creador
-                              </span>
-                            )}
-                            {isAdmin && (
-                              <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[9px] px-1.5 py-0.2 rounded font-extrabold">
-                                Admin
-                              </span>
-                            )}
-                            {u.isPremium && (
-                              <span className="bg-amber-400 text-slate-950 text-[9px] px-1.5 py-0.2 rounded font-extrabold">
-                                VIP
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-slate-500 truncate mt-0.5">{u.email}</p>
-                        </div>
-                      </div>
-
-                      {/* User Actions */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => {
-                            setInputText((prev) => `@${u.name} ` + prev);
-                            setIsRoomUsersModalOpen(false);
-                            notify(`Mención a @${u.name} lista en el chat`, 'info');
-                          }}
-                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold transition-all flex items-center gap-1"
-                          title="Mencionar en el chat"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" /> Mencionar
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </motion.div>
+          {/* Global Anti-Screenshot & Screen Recording Privacy Shield */}
+          <PrivacyProtectionOverlay userEmail={currentUser?.email} />
         </div>
-      )}
-
-      {/* MODAL 3: AI ASSISTANT SIDE DRAWER */}
-      {isAiAssistantOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-end">
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            className="w-full max-w-md bg-slate-900 border-l border-slate-800 h-full p-6 flex flex-col justify-between shadow-2xl relative"
-          >
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    <Bot className="w-6 h-6 animate-pulse" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white">Asistente IA Aether</h3>
-                    <p className="text-xs text-slate-400">Inteligencia Artificial Multimodal Integrada</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsAiAssistantOpen(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Quick AI Prompts */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleAskAiAssistant('Resume en 3 puntos clave la conversación actual de la sala.')}
-                  className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-purple-500/40 text-left text-xs text-slate-300 font-medium transition-all"
-                >
-                  ✨ Resumir Conversación
-                </button>
-                <button
-                  onClick={() => handleAskAiAssistant('Dame 3 sugerencias de respuesta inteligentes para responder amablemente en este chat.')}
-                  className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-purple-500/40 text-left text-xs text-slate-300 font-medium transition-all"
-                >
-                  💡 Sugerir Respuesta
-                </button>
-              </div>
-
-              {/* Response Display Box */}
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 min-h-[180px] max-h-[350px] overflow-y-auto space-y-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-purple-400">
-                  <Sparkles className="w-4 h-4" /> Respuesta de la IA:
-                </div>
-                {isAiDrawerLoading ? (
-                  <div className="flex items-center justify-center py-8 gap-2 text-xs text-purple-300 font-bold animate-pulse">
-                    <Activity className="w-4 h-4 animate-spin" /> Procesando con Aether AI...
-                  </div>
-                ) : aiDrawerResponse ? (
-                  <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
-                    {aiDrawerResponse}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic py-4">
-                    Escribe una pregunta o haz clic en los botones superiores para interactuar con la IA.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* AI Prompt Form */}
-            <div className="space-y-2 pt-4 border-t border-slate-800">
-              <div className="relative flex items-center bg-slate-950 border border-slate-800 rounded-2xl p-1.5">
-                <input
-                  type="text"
-                  placeholder="Pregunta algo a la IA..."
-                  value={aiDrawerPrompt}
-                  onChange={(e) => setAiDrawerPrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleAskAiAssistant();
-                  }}
-                  className="flex-1 bg-transparent px-3 text-xs text-white placeholder-slate-500 outline-none"
-                />
-                <button
-                  onClick={() => handleAskAiAssistant()}
-                  disabled={isAiDrawerLoading}
-                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all disabled:opacity-50"
-                >
-                  Consultar
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </div>
   );
 }

@@ -14,6 +14,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage, ChatRoom, CustomPreferences, UserProfile } from '../types';
 import { CryptoEngine } from '../lib/crypto';
+import { UserBadgeList, UserBadgeItem, UserBadgeShowcase, UserPrimaryBadge } from './BadgeRenderer';
 
 interface ChatRoomScreenProps {
   currentRoom: ChatRoom;
@@ -893,7 +894,7 @@ export function ChatRoomScreen(props: ChatRoomScreenProps) {
                   const isUserTyping = typingUsersMap[u.id] || (peerTyping && peerTyping === u.name);
                   const isCreator = currentRoom.createdById === u.id;
                   const isAdmin = u.role === 'admin';
-                  const isCyberEliteUser = u.planTier === 'cyber_elite' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com');
+                  const isCyberEliteUser = u.planTier === 'cyber_elite' ;
                   const isVIP = u.isPremium || isCyberEliteUser;
                   const isMe = u.id === currentUser?.id;
 
@@ -925,27 +926,37 @@ export function ChatRoomScreen(props: ChatRoomScreenProps) {
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-bold text-slate-200 truncate">{u.name}</span>
                           {isCreator && (
                             <span title="Creador de la Sala">
                               <Crown className="w-3 h-3 text-amber-400 shrink-0" />
                             </span>
                           )}
-                          {isAdmin && (
-                            <span title="Admin">
-                              <ShieldCheck className="w-3 h-3 text-indigo-400 shrink-0" />
-                            </span>
+                          {Array.isArray(u.badges) && u.badges.length > 0 ? (
+                            <UserPrimaryBadge 
+                              badges={u.badges} 
+                              customBadgeText={u.customBadgeText} 
+                              size="xs" 
+                            />
+                          ) : (
+                            <>
+                              {isAdmin && (
+                                <span title="Admin">
+                                  <ShieldCheck className="w-3 h-3 text-indigo-400 shrink-0" />
+                                </span>
+                              )}
+                              {isCyberEliteUser ? (
+                                <span className="text-[9px] bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-cyan-500/20 text-cyan-300 font-black px-1.5 py-0.5 rounded border border-cyan-400/40 flex items-center gap-0.5 shadow-[0_0_8px_rgba(6,182,212,0.3)] shrink-0" title="Insignia Cyber ULTRA ELITE">
+                                  <Zap className="w-2.5 h-2.5 text-cyan-300 animate-pulse" /> ULTRA
+                                </span>
+                              ) : isVIP ? (
+                                <span className="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-1 rounded flex items-center gap-0.5 shrink-0" title="Insignia VIP Premium">
+                                  <Crown className="w-2.5 h-2.5 text-amber-400" /> VIP
+                                </span>
+                              ) : null}
+                            </>
                           )}
-                          {isCyberEliteUser ? (
-                            <span className="text-[9px] bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-cyan-500/20 text-cyan-300 font-black px-1.5 py-0.5 rounded border border-cyan-400/40 flex items-center gap-0.5 shadow-[0_0_8px_rgba(6,182,212,0.3)] shrink-0" title="Insignia Cyber ULTRA ELITE">
-                              <Zap className="w-2.5 h-2.5 text-cyan-300 animate-pulse" /> ULTRA
-                            </span>
-                          ) : isVIP ? (
-                            <span className="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-1 rounded flex items-center gap-0.5 shrink-0" title="Insignia VIP Premium">
-                              <Crown className="w-2.5 h-2.5 text-amber-400" /> VIP
-                            </span>
-                          ) : null}
                         </div>
                         <div className="text-[10px] h-3.5">
                           {isUserTyping ? (
@@ -1219,10 +1230,21 @@ export function ChatRoomScreen(props: ChatRoomScreenProps) {
                 >
                   {/* Sender Info Row (only shown if not grouped) */}
                   {!isSameSenderAsPrev && (
-                    <div className={`flex items-center gap-2 px-1 mb-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div className={`flex items-center gap-1.5 px-1 mb-1 flex-wrap ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                         {isMe ? 'Tú' : m.senderName}
                       </span>
+                      {/* Sender Highest Unlocked Badge (Only 1 single badge) */}
+                      {(isMe 
+                        ? (Array.isArray(currentUser.badges) && currentUser.badges.length > 0)
+                        : (Array.isArray(m.senderBadges) && m.senderBadges.length > 0)
+                      ) && (
+                        <UserPrimaryBadge 
+                          badges={isMe ? currentUser.badges : m.senderBadges} 
+                          customBadgeText={isMe ? currentUser.customBadgeText : m.senderCustomBadgeText} 
+                          size="xs" 
+                        />
+                      )}
                       <span className="w-1 h-1 rounded-full bg-slate-700" />
                       <span className="text-[9px] font-mono text-slate-500">
                         {m.time}
@@ -2346,7 +2368,7 @@ export function ChatRoomScreen(props: ChatRoomScreenProps) {
                   ) : (
                     selectedUserProfile.name?.substring(0, 2).toUpperCase() || 'OP'
                   )}
-                  {(selectedUserProfile.planTier === 'cyber_elite' || (selectedUserProfile.email && selectedUserProfile.email.toLowerCase() === 'ydark126@gmail.com')) && (
+                  {(selectedUserProfile.planTier === 'cyber_elite' ) && (
                     <div className="absolute bottom-0 right-0 bg-gradient-to-r from-cyan-500 to-purple-600 text-white p-0.5 rounded-tl-lg shadow-lg">
                       <Zap className="w-3 h-3 text-cyan-200 animate-pulse" />
                     </div>
@@ -2355,7 +2377,7 @@ export function ChatRoomScreen(props: ChatRoomScreenProps) {
                 <div>
                   <h3 className="text-base font-black text-white flex items-center gap-1.5">
                     {selectedUserProfile.name}
-                    {(selectedUserProfile.planTier === 'cyber_elite' || (selectedUserProfile.email && selectedUserProfile.email.toLowerCase() === 'ydark126@gmail.com')) ? (
+                    {(selectedUserProfile.planTier === 'cyber_elite' ) ? (
                       <span title="Cyber ULTRA ELITE"><Zap className="w-4 h-4 text-cyan-300 animate-pulse" /></span>
                     ) : selectedUserProfile.isPremium ? (
                       <span title="Aether VIP"><Crown className="w-4 h-4 text-amber-400" /></span>
@@ -2368,7 +2390,7 @@ export function ChatRoomScreen(props: ChatRoomScreenProps) {
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs text-slate-300">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">Membresía:</span>
-                  {(selectedUserProfile.planTier === 'cyber_elite' || (selectedUserProfile.email && selectedUserProfile.email.toLowerCase() === 'ydark126@gmail.com')) ? (
+                  {(selectedUserProfile.planTier === 'cyber_elite' ) ? (
                     <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-cyan-200 flex items-center gap-1">
                       <Zap className="w-3 h-3 text-cyan-400 animate-bounce" /> Cyber ULTRA ELITE
                     </span>
@@ -2389,6 +2411,19 @@ export function ChatRoomScreen(props: ChatRoomScreenProps) {
                   <span className="font-bold text-emerald-400">En línea</span>
                 </div>
               </div>
+
+              {/* Official Badges Showcase */}
+              {Array.isArray(selectedUserProfile.badges) && selectedUserProfile.badges.length > 0 && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-purple-500/30 space-y-2">
+                  <span className="text-[10px] font-extrabold text-purple-300 uppercase tracking-wider flex items-center gap-1">
+                    <Crown className="w-3 h-3 text-purple-400" /> Insignias Oficiales del Perfil
+                  </span>
+                  <UserBadgeShowcase 
+                    badges={selectedUserProfile.badges} 
+                    customBadgeText={selectedUserProfile.customBadgeText} 
+                  />
+                </div>
+              )}
 
               <button
                 type="button"

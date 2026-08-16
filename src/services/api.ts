@@ -9,7 +9,7 @@ export async function apiRequest<T = any>(
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (token && !headers['Authorization']) {
+  if (token && token !== 'undefined' && token !== 'null' && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 

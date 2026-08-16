@@ -38,6 +38,14 @@ export const adminService = {
     });
   },
 
+  async updateUserBadges(userId: string, badges: string[], customBadgeText?: string, token?: string): Promise<any> {
+    return apiRequest('/api/admin/users/update-badges', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify({ userId, badges, customBadgeText }),
+    });
+  },
+
   async deleteUser(userId: string, token?: string): Promise<any> {
     return apiRequest('/api/admin/delete-user', {
       method: 'POST',

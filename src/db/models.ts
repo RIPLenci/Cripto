@@ -28,6 +28,8 @@ export interface IUser extends Document {
   violations?: number;
   infractions?: any[];
   ipWhitelist?: string[];
+  badges?: string[];
+  customBadgeText?: string;
 }
 const UserSchema = new Schema<IUser>({
   id: { type: String, required: true, unique: true, index: true },
@@ -49,7 +51,9 @@ const UserSchema = new Schema<IUser>({
   banEvidence: { type: String },
   violations: { type: Number, default: 0 },
   infractions: { type: [Object], default: [] },
-  ipWhitelist: { type: [String], default: [] }
+  ipWhitelist: { type: [String], default: [] },
+  badges: { type: [String], default: [] },
+  customBadgeText: { type: String, default: '' }
 });
 UserSchema.index({ email: 1 });
 UserSchema.index({ id: 1 });

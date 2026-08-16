@@ -1,25 +1,51 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* Strictly Lock Viewport to prevent side scrolling */
-html, body, #root, main {
-  width: 100vw !important;
-  max-width: 100vw !important;
+/* Dynamic Viewport & Safe Area Inset Support */
+:root {
+  --vh: 1vh;
+  --app-height: 100vh;
+  --app-width: 100vw;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+/* Strictly Lock Viewport & Cross-Device Adaptation */
+html, body {
+  width: 100%;
+  min-width: 320px;
+  max-width: 100vw;
+  height: 100%;
+  height: 100dvh;
+  height: calc(var(--vh, 1vh) * 100);
+  min-height: -webkit-fill-available;
   overflow-x: hidden !important;
-  overscroll-behavior-x: none !important;
-  touch-action: pan-y !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: touch;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
-body {
-  height: 100%;
+#root {
+  width: 100%;
+  max-width: 100vw;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: calc(var(--vh, 1vh) * 100);
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
 }
 
 /* Force containment on all app containers and main elements */
 .aether-app-bg, #root > div, main {
-  width: 100vw !important;
+  width: 100% !important;
   max-width: 100vw !important;
   overflow-x: hidden !important;
   touch-action: pan-y !important;
@@ -27,6 +53,33 @@ body {
 
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+/* ANTI-SCREENSHOT, ANTI-SELECTION & DRM PROTECTION RULES */
+body, html, #root {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-drag: none !important;
+}
+
+/* Allow text selection inside editable input/textarea fields */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  /* Prevent iOS Safari from auto-zooming on focus when font-size < 16px */
+  font-size: 16px !important;
+}
+
+/* Disable drag & drop of media and graphics */
+img, svg, video, canvas {
+  -webkit-user-drag: none !important;
+  user-drag: none !important;
+  pointer-events: auto;
 }
 
 /* THEME SYSTEM VARIABLES */
@@ -119,6 +172,20 @@ body {
   border-color: var(--border-main);
 }
 
+/* Safe Area Inset Responsive Padding */
+.safe-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 0px);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+}
+.safe-left {
+  padding-left: max(env(safe-area-inset-left, 0px), 0px);
+}
+.safe-right {
+  padding-right: max(env(safe-area-inset-right, 0px), 0px);
+}
+
 @theme {
   --animate-audio-wave: audio-wave 1.2s ease-in-out infinite;
   --animate-blob: blob 7s infinite;
@@ -159,7 +226,12 @@ body {
   }
 }
 
-/* Custom scrollbar for webkit browsers */
+/* Cross-browser custom scrollbar for Firefox & WebKit */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(51, 65, 85, 0.7) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -178,28 +250,107 @@ body {
   background: var(--text-muted);
 }
 
-/* ANTI-SCREENSHOT & PRIVACY PROTECTION RULES */
-body, html {
-  -webkit-user-select: none !important;
-  -moz-user-select: none !important;
-  -ms-user-select: none !important;
-  user-select: none !important;
-  -webkit-touch-callout: none !important;
+/* ANTI-SPY / ANTI-SHOULDER SURFING MODE */
+.anti-spy-enabled .chat-bubble-text,
+.anti-spy-enabled .chat-media-content,
+.anti-spy-enabled .secret-content {
+  filter: blur(8px) brightness(0.6);
+  transition: filter 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s ease;
+  user-select: none;
+  cursor: pointer;
 }
 
-/* Allow text selection inside editable input/textarea fields */
-input, textarea, [contenteditable="true"] {
-  -webkit-user-select: text !important;
-  -moz-user-select: text !important;
-  -ms-user-select: text !important;
-  user-select: text !important;
+.anti-spy-enabled .chat-bubble-text:hover,
+.anti-spy-enabled .chat-bubble-text:active,
+.anti-spy-enabled .chat-bubble-text:focus,
+.anti-spy-enabled .chat-media-content:hover,
+.anti-spy-enabled .chat-media-content:active,
+.anti-spy-enabled .secret-content:hover,
+.anti-spy-enabled .secret-content:active {
+  filter: blur(0px) brightness(1);
 }
 
-/* Print Protection: Blank out screen if print or screen grab is triggered */
+
+
+
+/* Print Protection: Absolute Blackout with Forensic Violation Document */
 @media print {
-  html, body, #root {
-    display: none !important;
+  html, body, #root, * {
     visibility: hidden !important;
+    background: #000000 !important;
+    color: #ffffff !important;
+    display: none !important;
+  }
+  
+  body::before {
+    visibility: visible !important;
+    display: flex !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: #020617 !important;
+    color: #f43f5e !important;
+    font-family: monospace !important;
+    font-size: 24pt !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 40px !important;
+    border: 10px solid #f43f5e !important;
+    content: "⚠️ VIOLACIÓN DE SEGURIDAD DETECTADA\n\nCONTENIDO CIFRADO Y CONFIDENCIAL - AETHER SECURITY NETWORK\nESTÁ PROHIBIDA LA IMPRESIÓN, COPIA O EXPORTACIÓN DE ESTE DOCUMENTO." !important;
+    white-space: pre-wrap !important;
+    z-index: 99999999 !important;
   }
 }
 
+/* BADGE ULTRA ANIMATIONS & GLOW EFFECTS */
+@keyframes badge-shimmer {
+  0% { transform: translateX(-100%) rotate(25deg); }
+  100% { transform: translateX(200%) rotate(25deg); }
+}
+
+@keyframes badge-pulse-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor) brightness(1); }
+  50% { filter: drop-shadow(0 0 10px currentColor) brightness(1.25); }
+}
+
+@keyframes badge-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+
+.animate-badge-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-badge-shimmer::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.25) 45%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0.25) 55%,
+    transparent 80%
+  );
+  transform: translateX(-100%) rotate(25deg);
+  animation: badge-shimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.animate-badge-pulse {
+  animation: badge-pulse-glow 3s ease-in-out infinite;
+}
+
+.animate-badge-float {
+  animation: badge-float 3s ease-in-out infinite;
+}

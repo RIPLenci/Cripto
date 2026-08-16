@@ -6,11 +6,15 @@ import {
   Database, Zap, Eye, Terminal, Mail, KeyRound, UserCheck, UserX, BadgeCheck,
   Globe, Clock, Layers, ArrowRight, Shield, Award, Sparkles, Bot, UserCog, UserMinus, X, Crown,
   Edit3, Plus, Search, Filter, MessageSquare, Settings, Power, Info, ChevronRight, Copy, Check, SlidersHorizontal, Menu, Flame, Radar,
-  FileText, Download, Scale, Gavel, FileCheck
+  FileText, Download, Scale, Gavel, FileCheck, LayoutGrid, List
 } from 'lucide-react';
-import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail, ForensicCase, PlanTier } from '../types';
+import { SystemStats, UserProfile, ThreatLog, SecurityAccessLog, BannedIpDetail, ForensicCase, PlanTier, BadgeType } from '../types';
 import { adminService, roomService } from '../services';
 import { SecurityMonitor } from './SecurityMonitor';
+import { 
+  BADGE_ORDER, BADGE_DEFINITIONS, BadgeIcon, UserBadgeList, UserBadgeItem, 
+  UserBadgeShowcase, getSortedBadges 
+} from './BadgeRenderer';
 
 interface AdminDashboardProps {
   stats: SystemStats | null;
@@ -42,6 +46,67 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  // Badge Management Modal State
+  const [badgeModalUser, setBadgeModalUser] = useState<UserProfile | null>(null);
+  const [selectedBadges, setSelectedBadges] = useState<string[]>([]);
+  const [customBadgeTextInput, setCustomBadgeTextInput] = useState('');
+  const [badgeFilterCategory, setBadgeFilterCategory] = useState<'all' | 'hierarchy' | 'special' | 'social' | 'vip' | 'general'>('all');
+  const [badgeSearchQuery, setBadgeSearchQuery] = useState('');
+  const [badgeViewMode, setBadgeViewMode] = useState<'list' | 'grid'>('list');
+  const [savingBadges, setSavingBadges] = useState(false);
+
+  const openBadgeManager = (user: UserProfile) => {
+    setBadgeModalUser(user);
+    setSelectedBadges(Array.isArray(user.badges) ? [...user.badges] : []);
+    setCustomBadgeTextInput(user.customBadgeText || '');
+    setBadgeFilterCategory('all');
+    setBadgeSearchQuery('');
+  };
+
+  const handleToggleBadge = (badgeId: string) => {
+    setSelectedBadges(prev => 
+      prev.includes(badgeId) ? prev.filter(b => b !== badgeId) : [...prev, badgeId]
+    );
+  };
+
+  const handleSetBadgeState = (badgeId: string, give: boolean) => {
+    setSelectedBadges(prev => {
+      if (give) {
+        return prev.includes(badgeId) ? prev : [...prev, badgeId];
+      } else {
+        return prev.filter(b => b !== badgeId);
+      }
+    });
+  };
+
+  const handleSetOnlyBadge = (badgeId: string) => {
+    setSelectedBadges([badgeId]);
+  };
+
+  const handleClearAllBadges = () => {
+    setSelectedBadges([]);
+  };
+
+  const handleSaveBadges = async () => {
+    if (!badgeModalUser) return;
+    setSavingBadges(true);
+    try {
+      const res = await adminService.updateUserBadges(
+        badgeModalUser.id,
+        selectedBadges,
+        customBadgeTextInput,
+        token
+      );
+      showToast(res.message || "Insignias actualizadas con éxito", "success");
+      setBadgeModalUser(null);
+      onRefresh();
+    } catch (err: any) {
+      showToast(err.message || "Error al actualizar insignias", "error");
+    } finally {
+      setSavingBadges(false);
+    }
   };
 
   // Forensic Cases State (Argentine Law Audit Dossiers)
@@ -166,7 +231,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditRole(u.role);
     setEditStatus(u.status === 'Baneado' ? 'Baneado' : 'Activo');
     setEditIp(u.ip || '');
-    const currentTier: PlanTier = u.planTier || ((u.email && u.email.toLowerCase() === 'ydark126@gmail.com') ? 'cyber_elite' : (u.isPremium ? 'premium' : 'free'));
+    const currentTier: PlanTier = u.planTier || (u.isPremium ? 'premium' : 'free');
     setEditPlanTier(currentTier);
     if (u.premiumExpiresAt) {
       const remainingDays = Math.max(1, Math.round((u.premiumExpiresAt - Date.now()) / (1000 * 60 * 60 * 24)));
@@ -946,6 +1011,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <th className="p-4">Usuario</th>
                         <th className="p-4">IP & Rol</th>
                         <th className="p-4">Plan</th>
+                        <th className="p-4">Insignias</th>
                         <th className="p-4">Estado</th>
                         <th className="p-4 text-right">Acciones CRUD</th>
                       </tr>
@@ -953,7 +1019,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <tbody className="divide-y divide-slate-800/60 text-xs">
                       {filteredUsers.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-slate-500 font-medium">
+                          <td colSpan={6} className="p-8 text-center text-slate-500 font-medium">
                             No se encontraron usuarios coincidentes.
                           </td>
                         </tr>
@@ -992,7 +1058,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                             {/* Premium Plan */}
                             <td className="p-4">
-                              {u.planTier === 'cyber_elite' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com') ? (
+                              {u.planTier === 'cyber_elite'  ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                                   <Zap className="w-3 h-3 text-cyan-400" />
                                   <span>CYBER ELITE</span>
@@ -1005,6 +1071,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               ) : (
                                 <span className="text-slate-500 text-[11px]">Estándar</span>
                               )}
+                            </td>
+
+                            {/* Badges Column */}
+                            <td className="p-4">
+                              <div className="flex flex-wrap items-center gap-1 max-w-[220px]">
+                                {Array.isArray(u.badges) && u.badges.length > 0 ? (
+                                  <UserBadgeList 
+                                    badges={u.badges} 
+                                    customBadgeText={u.customBadgeText} 
+                                    size="xs" 
+                                    maxDisplay={4}
+                                  />
+                                ) : (
+                                  <span className="text-slate-600 text-[11px] italic">Sin insignias</span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Status */}
@@ -1022,6 +1104,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {/* Actions CRUD */}
                             <td className="p-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
+                                {/* Badges Manager Button */}
+                                <button
+                                  onClick={() => openBadgeManager(u)}
+                                  title="Gestionar Insignias Oficiales"
+                                  className="p-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-all flex items-center gap-1"
+                                >
+                                  <Award className="w-3.5 h-3.5 text-purple-400" />
+                                  <span className="hidden xl:inline text-[10px] font-bold">Insignias</span>
+                                </button>
+
                                 {/* Edit */}
                                 <button
                                   onClick={() => openEditUser(u)}
@@ -1901,7 +1993,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     >
                       <option value="">-- Seleccionar Usuario --</option>
                       {users.map((u, idx) => {
-                        const isCyber = u.planTier === 'cyber_elite' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com');
+                        const isCyber = u.planTier === 'cyber_elite' ;
                         const tierDisplay = isCyber ? 'cyber_elite' : (u.planTier || (u.isPremium ? 'premium' : 'free'));
                         return (
                           <option key={u.id ? `${u.id}-${idx}` : `opt-${idx}`} value={u.id}>
@@ -1956,11 +2048,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-4">
                 <h3 className="text-xs font-bold uppercase text-slate-400">Usuarios Premium & Cyber Elite Actuales</h3>
                 <div className="space-y-2">
-                  {users.filter(u => u.isPremium || u.planTier === 'cyber_elite' || u.planTier === 'premium' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com')).length === 0 ? (
+                  {users.filter(u => u.isPremium || u.planTier === 'cyber_elite' || u.planTier === 'premium' ).length === 0 ? (
                     <div className="p-4 text-center text-slate-500 text-xs">No hay usuarios con plan VIP / Cyber Elite activo.</div>
                   ) : (
-                    users.filter(u => u.isPremium || u.planTier === 'cyber_elite' || u.planTier === 'premium' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com')).map((u, idx) => {
-                      const isCyber = u.planTier === 'cyber_elite' || (u.email && u.email.toLowerCase() === 'ydark126@gmail.com');
+                    users.filter(u => u.isPremium || u.planTier === 'cyber_elite' || u.planTier === 'premium' ).map((u, idx) => {
+                      const isCyber = u.planTier === 'cyber_elite' ;
                       return (
                         <div key={u.id ? `${u.id}-${idx}` : `prem-${idx}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
                           <div className="flex items-center gap-3">
@@ -2254,17 +2346,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   )}
                 </div>
 
-                <div className="pt-4 flex gap-3">
+                {/* Quick Link to Badge Selector */}
+                {editingUser && (
+                  <div className="pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = editingUser;
+                        setEditingUser(null);
+                        openBadgeManager(target);
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-purple-600/15 hover:bg-purple-600/25 border border-purple-500/30 text-purple-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Award className="w-4 h-4 text-purple-400" />
+                      <span>Elegir e Insignias de este Usuario (Selector SÍ / NO)</span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="pt-2 flex gap-3">
                   <button 
                     type="button" 
                     onClick={() => setEditingUser(null)}
-                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs"
+                    className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs"
+                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer"
                   >
                     Guardar Cambios
                   </button>
@@ -2565,6 +2675,466 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs"
                 >
                   Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: ADVANCED BADGE MANAGER (Asignación Múltiple de Insignias Adaptativa para Cualquier Dispositivo) */}
+      <AnimatePresence>
+        {badgeModalUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 15 }}
+              className="bg-slate-900 border border-purple-500/30 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 w-full max-w-4xl shadow-2xl text-slate-100 max-h-[94vh] sm:max-h-[90vh] flex flex-col space-y-3 sm:space-y-4 my-auto"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-800/80 shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white font-extrabold text-base sm:text-lg shadow-lg shadow-purple-500/25 shrink-0">
+                    <Award className="w-5 h-5 sm:w-6 sm:h-6 text-white animate-pulse" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-extrabold text-sm sm:text-lg text-white truncate">
+                        Selector de Insignias
+                      </h3>
+                      <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono border border-purple-500/30 shrink-0">
+                        {selectedBadges.length} de {BADGE_ORDER.length}
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-slate-400 truncate">
+                      Usuario: <strong className="text-white font-bold">{badgeModalUser.name}</strong> ({badgeModalUser.email})
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setBadgeModalUser(null)} 
+                  className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 ml-2"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status Summary & Quick Counts */}
+              <div className="p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/40 border border-purple-500/30 shrink-0 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0 hidden xs:block">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <span className="text-[11px] sm:text-xs text-slate-300 truncate">
+                    Elige individualmente tocando cualquier insignia:
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] sm:text-xs font-bold flex items-center gap-1">
+                    <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />
+                    <span>{selectedBadges.length} SÍ</span>
+                  </div>
+                  <div className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-slate-800/80 border border-slate-700 text-slate-400 text-[11px] sm:text-xs font-bold flex items-center gap-1">
+                    <X className="w-3 h-3 text-slate-500" />
+                    <span>{BADGE_ORDER.length - selectedBadges.length} NO</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Preview Bar */}
+              <div className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-slate-950 border border-slate-800 shrink-0 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] sm:text-[11px]">
+                  <span className="uppercase tracking-wider font-extrabold text-purple-300 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-purple-400" />
+                    Vista Previa en Vivo:
+                  </span>
+                  <span className="text-slate-500 font-mono hidden xs:inline">
+                    {selectedBadges.length === 0 ? 'Sin insignias activas' : `${selectedBadges.length} asignadas`}
+                  </span>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2 p-2 sm:p-2.5 bg-slate-900/90 rounded-xl border border-slate-800/80 max-h-20 overflow-y-auto">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="w-6 h-6 rounded-lg bg-purple-600/30 border border-purple-500/40 flex items-center justify-center font-bold text-[10px] text-purple-200">
+                      {badgeModalUser.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-bold text-xs text-white">{badgeModalUser.name}</span>
+                  </div>
+                  <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+                  <div className="flex flex-wrap items-center gap-1 flex-1">
+                    {selectedBadges.length > 0 ? (
+                      <UserBadgeList 
+                        badges={selectedBadges} 
+                        customBadgeText={customBadgeTextInput} 
+                        size="sm" 
+                      />
+                    ) : (
+                      <span className="text-[11px] text-slate-500 italic">
+                        (Ninguna insignia seleccionada)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search, Filter Tabs & View Mode (Adaptive Controls) */}
+              <div className="space-y-2 shrink-0">
+                {/* Search Bar + View Toggle + Clear */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                    <input 
+                      type="text"
+                      placeholder="Buscar insignia (Donador, Staff, TikTok, VIP, Owner...)"
+                      value={badgeSearchQuery}
+                      onChange={e => setBadgeSearchQuery(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-7 py-1.5 sm:py-2 text-xs text-white placeholder-slate-500 focus:border-purple-500 outline-none"
+                    />
+                    {badgeSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setBadgeSearchQuery('')}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* View Mode (List vs Grid) */}
+                  <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setBadgeViewMode('list')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                        badgeViewMode === 'list'
+                          ? 'bg-purple-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                      title="Vista en Lista Detallada"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline text-[11px]">Lista</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBadgeViewMode('grid')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                        badgeViewMode === 'grid'
+                          ? 'bg-purple-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                      title="Vista en Cuadrícula Compacta"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline text-[11px]">Cuadrícula</span>
+                    </button>
+                  </div>
+
+                  {/* Clear button */}
+                  <button
+                    type="button"
+                    onClick={handleClearAllBadges}
+                    disabled={selectedBadges.length === 0}
+                    className="px-2.5 py-1.5 sm:py-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+                    title="Desmarcar todas las insignias"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span className="hidden sm:inline">Desmarcar</span>
+                  </button>
+                </div>
+
+                {/* Category Horizontal Filter Bar (Scrollable on phones) */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+                  {[
+                    { id: 'all', label: `Todas (${BADGE_ORDER.length})` },
+                    { id: 'hierarchy', label: '👑 Jerarquía & Staff' },
+                    { id: 'social', label: '🌐 Redes Verificadas' },
+                    { id: 'vip', label: '⚡ VIP & Cyber' },
+                    { id: 'special', label: '✨ Especiales' },
+                    { id: 'general', label: '🛡️ Base' },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setBadgeFilterCategory(tab.id as any)}
+                      className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap text-[11px] transition-all cursor-pointer shrink-0 ${
+                        badgeFilterCategory === tab.id
+                          ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+                          : 'bg-slate-950/80 text-slate-400 hover:text-slate-200 border border-slate-800/80 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Badges Container (Adaptive List or Responsive Grid) */}
+              <div className="flex-1 overflow-y-auto pr-1 space-y-2 max-h-[420px] custom-scrollbar">
+                {badgeViewMode === 'list' ? (
+                  /* ================= LIST VIEW ================= */
+                  <div className="space-y-2">
+                    {BADGE_ORDER
+                      .filter(badgeId => {
+                        const def = BADGE_DEFINITIONS[badgeId];
+                        if (!def) return false;
+                        if (badgeFilterCategory !== 'all' && def.category !== badgeFilterCategory) return false;
+                        if (badgeSearchQuery.trim()) {
+                          const q = badgeSearchQuery.toLowerCase();
+                          return def.name.toLowerCase().includes(q) || def.description.toLowerCase().includes(q) || def.id.toLowerCase().includes(q);
+                        }
+                        return true;
+                      })
+                      .map((badgeId, idx) => {
+                        const def = BADGE_DEFINITIONS[badgeId];
+                        const isSelected = selectedBadges.includes(badgeId);
+                        const isCustomBadge = badgeId === 'custom';
+
+                        return (
+                          <div
+                            key={badgeId}
+                            onClick={() => handleToggleBadge(badgeId)}
+                            className={`p-3 rounded-xl sm:rounded-2xl border transition-all select-none cursor-pointer flex flex-col gap-2 ${
+                              isSelected
+                                ? 'bg-gradient-to-r from-purple-950/40 via-slate-900 to-slate-900 border-purple-500/80 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500/50'
+                                : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+                              {/* Left: Number + Icon + Info */}
+                              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                                <span className="w-5 text-center text-xs font-mono font-bold text-slate-500 shrink-0">
+                                  #{idx + 1}
+                                </span>
+
+                                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
+                                  isSelected
+                                    ? `${def.bgGradient} text-white ${def.glowColor} border-white/40 shadow-md`
+                                    : 'bg-slate-900 border-slate-800 text-slate-500'
+                                }`}>
+                                  <BadgeIcon badgeId={badgeId} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                    <span className={`font-extrabold text-xs sm:text-sm ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                                      {def.name}
+                                    </span>
+                                    <span className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.2 rounded-full bg-slate-900 border border-slate-800 text-slate-400 font-medium">
+                                      {def.category === 'hierarchy' && '👑 Jerarquía'}
+                                      {def.category === 'social' && '🌐 Red Social'}
+                                      {def.category === 'vip' && '⚡ VIP'}
+                                      {def.category === 'special' && '✨ Especial'}
+                                      {def.category === 'general' && '🛡️ Base'}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-2">
+                                    {def.description}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Right: Toggle Button */}
+                              <div 
+                                className="shrink-0"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleBadge(badgeId)}
+                                  className={`px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer min-h-[36px] ${
+                                    isSelected
+                                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/25 ring-1 ring-emerald-400'
+                                      : 'bg-slate-800 hover:bg-purple-600 hover:text-white text-slate-300 border border-slate-700'
+                                  }`}
+                                >
+                                  {isSelected ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 stroke-[3] text-white" />
+                                      <span>Añadida</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Añadir</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Inline Custom Text Field */}
+                            {isCustomBadge && isSelected && (
+                              <div 
+                                className="mt-1 pt-2 border-t border-purple-500/30 flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <span className="text-[10px] sm:text-[11px] font-bold text-purple-300 shrink-0">
+                                  Título Personalizado:
+                                </span>
+                                <input
+                                  type="text"
+                                  value={customBadgeTextInput}
+                                  onChange={e => setCustomBadgeTextInput(e.target.value)}
+                                  placeholder="Ej: Campeón, Desarrollador, VIP Supreme..."
+                                  maxLength={40}
+                                  className="flex-1 bg-slate-950 border border-purple-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-purple-400 outline-none"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  /* ================= GRID / COMPACT VIEW ================= */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {BADGE_ORDER
+                      .filter(badgeId => {
+                        const def = BADGE_DEFINITIONS[badgeId];
+                        if (!def) return false;
+                        if (badgeFilterCategory !== 'all' && def.category !== badgeFilterCategory) return false;
+                        if (badgeSearchQuery.trim()) {
+                          const q = badgeSearchQuery.toLowerCase();
+                          return def.name.toLowerCase().includes(q) || def.description.toLowerCase().includes(q) || def.id.toLowerCase().includes(q);
+                        }
+                        return true;
+                      })
+                      .map((badgeId, idx) => {
+                        const def = BADGE_DEFINITIONS[badgeId];
+                        const isSelected = selectedBadges.includes(badgeId);
+                        const isCustomBadge = badgeId === 'custom';
+
+                        return (
+                          <div
+                            key={badgeId}
+                            onClick={() => handleToggleBadge(badgeId)}
+                            className={`p-3 rounded-2xl border transition-all select-none cursor-pointer flex flex-col justify-between gap-2.5 ${
+                              isSelected
+                                ? 'bg-gradient-to-br from-slate-900 via-purple-950/30 to-slate-900 border-purple-500/80 shadow-lg shadow-purple-500/10 ring-1 ring-purple-500/50'
+                                : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/50'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
+                                isSelected
+                                  ? `${def.bgGradient} text-white ${def.glowColor} border-white/40 shadow-md`
+                                  : 'bg-slate-900 border-slate-800 text-slate-500'
+                              }`}>
+                                <BadgeIcon badgeId={badgeId} className="w-4 h-4" />
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className={`font-extrabold text-xs truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                                    {def.name}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-500 shrink-0">
+                                    #{idx + 1}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2 leading-tight">
+                                  {def.description}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div 
+                              className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1.5"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <span className="text-[10px] font-bold text-slate-500">
+                                {isSelected ? (
+                                  <span className="text-emerald-400 flex items-center gap-1">
+                                    <Check className="w-3 h-3" /> Activa
+                                  </span>
+                                ) : (
+                                  'Inactiva'
+                                )}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleBadge(badgeId)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all flex items-center gap-1 cursor-pointer min-h-[30px] ${
+                                  isSelected
+                                    ? 'bg-emerald-500 text-white shadow'
+                                    : 'bg-slate-800 hover:bg-purple-600 hover:text-white text-slate-300'
+                                }`}
+                              >
+                                {isSelected ? 'Añadida' : '+ Añadir'}
+                              </button>
+                            </div>
+
+                            {/* Inline Custom Text Field if active in grid view */}
+                            {isCustomBadge && isSelected && (
+                              <div 
+                                className="pt-2 border-t border-purple-500/30"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <input
+                                  type="text"
+                                  value={customBadgeTextInput}
+                                  onChange={e => setCustomBadgeTextInput(e.target.value)}
+                                  placeholder="Título personalizado..."
+                                  maxLength={40}
+                                  className="w-full bg-slate-950 border border-purple-500/40 rounded-xl px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:border-purple-400 outline-none"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+
+                {/* Empty Search Fallback */}
+                {BADGE_ORDER.filter(badgeId => {
+                  const def = BADGE_DEFINITIONS[badgeId];
+                  if (!def) return false;
+                  if (badgeFilterCategory !== 'all' && def.category !== badgeFilterCategory) return false;
+                  if (badgeSearchQuery.trim()) {
+                    const q = badgeSearchQuery.toLowerCase();
+                    return def.name.toLowerCase().includes(q) || def.description.toLowerCase().includes(q);
+                  }
+                  return true;
+                }).length === 0 && (
+                  <div className="p-6 text-center bg-slate-950/60 rounded-2xl border border-slate-800 text-slate-400 text-xs">
+                    No se encontraron insignias con el filtro seleccionado.
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex flex-col-reverse xs:flex-row items-stretch xs:items-center justify-between gap-2.5 pt-2.5 sm:pt-3 border-t border-slate-800/80 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setBadgeModalUser(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer text-center"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveBadges}
+                  disabled={savingBadges}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer"
+                >
+                  {savingBadges ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-white" />
+                      <span>Guardar Insignias ({selectedBadges.length})</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

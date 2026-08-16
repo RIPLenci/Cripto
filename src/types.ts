@@ -1,5 +1,38 @@
 export type PlanTier = 'free' | 'premium' | 'cyber_elite';
 
+export type BadgeType = 
+  | 'owner'
+  | 'developer'
+  | 'admin'
+  | 'staff'
+  | 'support'
+  | 'bug_hunter'
+  | 'donator'
+  | 'custom'
+  | 'booster'
+  | 'verified'
+  | 'verified_instagram'
+  | 'verified_tiktok'
+  | 'verified_youtube'
+  | 'verified_kick'
+  | 'verified_twitch'
+  | 'cyber_elite'
+  | 'premium'
+  | 'user';
+
+export interface BadgeDefinition {
+  id: BadgeType;
+  name: string;
+  shortName: string;
+  category: 'hierarchy' | 'special' | 'social' | 'vip' | 'general';
+  description: string;
+  bgGradient: string;
+  borderColor: string;
+  textColor: string;
+  glowColor: string;
+  iconName: string;
+}
+
 export interface InfractionLog {
   id: string;
   number: number;
@@ -35,6 +68,8 @@ export interface UserProfile {
   banEvidence?: string;
   bannedAt?: number;
   ipWhitelist?: string[];
+  badges?: string[];
+  customBadgeText?: string;
 }
 
 export interface ForensicCase {
@@ -91,6 +126,8 @@ export interface ChatMessage {
   senderId: string;
   senderName: string;
   senderEmail: string;
+  senderBadges?: string[];
+  senderCustomBadgeText?: string;
   encryptedText: string;
   text?: string;
   attachments?: Array<{ name: string; type: string; data: string; size?: string }>;
